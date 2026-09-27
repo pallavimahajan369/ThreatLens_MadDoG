@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>SentinelAI</title>
+
+    <link
+        rel="stylesheet"
+        href="popup.css"
+    >
+
+</head>
+
+
+<body>
+
+    <!-- Header -->
+
+    <div class="header">
+
+        <div class="logo-section">
+
+            <div class="logo">
+                🛡
+            </div>
+
+            <div>
+                <h1>SentinelAI</h1>
+                <span class="subtitle">
+                    Browser Security
+                </span>
+            </div>
+
+        </div>
+
+        <div class="protection-status">
+            ● ON
+        </div>
+
+    </div>
+
+
+    <!-- Current URL -->
+
+    <div class="url-section">
+
+        <span class="label">
+            Current Website
+        </span>
+
+        <div
+            id="currentUrl"
+            class="url"
+        >
+            Loading...
+        </div>
+
+    </div>
+
+
+    <!-- Risk -->
+
+    <div
+        id="riskBox"
+        class="risk-box"
+    >
+
+        <div
+            id="riskIcon"
+            class="risk-icon"
+        >
+            🟢
+        </div>
+
+        <div>
+
+            <div class="label">
+                Security Status
+            </div>
+
+            <div
+                id="riskLevel"
+                class="risk-level"
+            >
+                LOW RISK
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- Findings -->
+
+    <div class="findings">
+
+        <div class="finding-row">
+
+            <span>
+                Website Findings
+            </span>
+
+            <strong id="websiteFindings">
+                0
+            </strong>
+
+        </div>
+
+
+        <div class="finding-row">
+
+            <span>
+                Extension Findings
+            </span>
+
+            <strong id="extensionFindings">
+                0
+            </strong>
+
+        </div>
+
+    </div>
+
+
+    <!-- AI & Privacy -->
+
+    <div class="settings-info">
+
+        <div class="info-row">
+
+            <span>
+                AI Analysis
+            </span>
+
+            <span
+                id="aiStatus"
+                class="enabled"
+            >
+                ON
+            </span>
+
+        </div>
+
+
+        <div class="info-row">
+
+            <span>
+                Privacy Mode
+            </span>
+
+            <span
+                id="privacyStatus"
+                class="enabled"
+            >
+                ON
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <!-- Buttons -->
+
+    <div class="actions">
+
+        <button
+            id="detailsBtn"
+            class="primary-btn"
+        >
+            View Details
+        </button>
+
+
+        <button
+            id="dashboardBtn"
+            class="secondary-btn"
+        >
+            Dashboard
+        </button>
+
+    </div>
+
+
+    <script src="popup.js"></script>
+
+</body>
+
+</html>
