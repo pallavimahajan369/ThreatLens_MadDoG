@@ -1,12 +1,15 @@
 console.log("SentinelAI Dashboard loaded");
 
+
 const params =
     new URLSearchParams(
         window.location.search
     );
 
+
 const tabId =
     params.get("tabId");
+
 
 const currentWebsite =
     params.get("url");
@@ -26,6 +29,7 @@ if (!tabId) {
 
             const scan =
                 result[`scan_${tabId}`];
+
 
             if (!scan) {
 
@@ -59,15 +63,18 @@ if (!tabId) {
             ).textContent =
                 scan.forms || 0;
 
+
             document.getElementById(
                 "scriptsCount"
             ).textContent =
                 scan.scripts || 0;
 
+
             document.getElementById(
                 "iframesCount"
             ).textContent =
                 scan.iframes || 0;
+
 
             document.getElementById(
                 "domStatus"
@@ -76,18 +83,59 @@ if (!tabId) {
 
 
             // ===============================
-            // STATUS
+            // PHISHING RISK
             // ===============================
+
+            const phishingRisk =
+                scan.phishingRisk;
+
+
+            if (phishingRisk) {
+
+                document.getElementById(
+                    "phishingStatus"
+                ).textContent =
+                    phishingRisk.risk;
+
+            } else {
+
+                document.getElementById(
+                    "phishingStatus"
+                ).textContent =
+                    "Not analyzed";
+
+            }
+
+
+            // ===============================
+            // OVERALL RISK
+            // ===============================
+
+            let overallRisk = "LOW";
+
+
+            if (
+                phishingRisk &&
+                phishingRisk.risk
+            ) {
+
+                overallRisk =
+                    phishingRisk.risk;
+
+            }
+
 
             document.getElementById(
                 "overallRisk"
             ).textContent =
-                "LOW";
+                overallRisk;
+
 
             document.getElementById(
                 "websiteRisk"
             ).textContent =
-                "LOW";
+                overallRisk;
+
 
             document.getElementById(
                 "extensionRisk"
@@ -95,30 +143,33 @@ if (!tabId) {
                 "LOW";
 
 
-            document.getElementById(
-                "phishingStatus"
-            ).textContent =
-                "Not analyzed";
+            // ===============================
+            // OTHER STATUS
+            // ===============================
 
             document.getElementById(
                 "promptStatus"
             ).textContent =
                 "Not analyzed";
 
+
             document.getElementById(
                 "extensionCount"
             ).textContent =
                 "Not analyzed";
+
 
             document.getElementById(
                 "permissionCount"
             ).textContent =
                 "Not analyzed";
 
+
             document.getElementById(
                 "extensionRiskDetail"
             ).textContent =
                 "LOW";
+
 
             document.getElementById(
                 "extensionFindings"
@@ -133,33 +184,47 @@ if (!tabId) {
             const urlFindings =
                 scan.urlFindings || [];
 
+
             const domFindings =
                 scan.domFindings || [];
 
+
             const formFindings =
                 scan.formFindings || [];
-            
+
+
             const scriptIframeFindings =
                 scan.scriptIframeFindings || [];
+
 
             const sensitiveDataFindings =
                 scan.sensitiveDataFindings || [];
 
+
             const findings = [
+
                 ...urlFindings,
+
                 ...domFindings,
+
                 ...formFindings,
+
                 ...scriptIframeFindings,
+
                 ...sensitiveDataFindings
+
             ];
 
 
+            // ===============================
             // URL FINDINGS COUNT
+            // ===============================
 
             const urlFindingsElement =
                 document.getElementById(
                     "urlFindings"
                 );
+
 
             if (urlFindingsElement) {
 
@@ -169,15 +234,20 @@ if (!tabId) {
             }
 
 
+            // ===============================
             // FINDINGS CONTAINER
+            // ===============================
 
             const findingsContainer =
                 document.getElementById(
                     "findingsContainer"
                 );
 
+
             if (!findingsContainer) {
+
                 return;
+
             }
 
 
@@ -187,13 +257,16 @@ if (!tabId) {
                     "No security findings";
 
                 return;
+
             }
 
 
             findingsContainer.innerHTML = "";
 
 
+            // ===============================
             // DISPLAY FINDINGS
+            // ===============================
 
             findings.forEach((finding) => {
 
@@ -201,6 +274,7 @@ if (!tabId) {
                     document.createElement(
                         "div"
                     );
+
 
                 item.className =
                     "finding-item";
@@ -211,6 +285,7 @@ if (!tabId) {
                         "strong"
                     );
 
+
                 severity.textContent =
                     finding.severity;
 
@@ -220,13 +295,20 @@ if (!tabId) {
                         "span"
                     );
 
+
                 reason.textContent =
                     finding.reason;
 
 
-                item.appendChild(severity);
+                item.appendChild(
+                    severity
+                );
 
-                item.appendChild(reason);
+
+                item.appendChild(
+                    reason
+                );
+
 
                 findingsContainer.appendChild(
                     item

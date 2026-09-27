@@ -57,6 +57,18 @@ function scanPage(reason = "page-load") {
     result.sensitiveDataFindings =
         sensitiveDataFindings;
 
+      
+    const phishingRisk =
+        analyzePhishingRisk(
+            urlFindings,
+            domFindings,
+            formFindings,
+            scriptIframeFindings
+        );
+
+    result.phishingRisk =
+        phishingRisk;
+
         
     // ===============================
     // CONSOLE
