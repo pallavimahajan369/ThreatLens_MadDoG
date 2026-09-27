@@ -45,6 +45,12 @@ function scanPage(reason = "page-load") {
 
     result.formFindings = formFindings;
 
+    const scriptIframeFindings =
+        analyzeScriptIframeSecurity();
+
+    result.scriptIframeFindings =
+        scriptIframeFindings;
+
 
     // ===============================
     // CONSOLE
