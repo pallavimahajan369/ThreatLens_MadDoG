@@ -51,7 +51,13 @@ function scanPage(reason = "page-load") {
     result.scriptIframeFindings =
         scriptIframeFindings;
 
+    const sensitiveDataFindings =
+        analyzeSensitiveData();
 
+    result.sensitiveDataFindings =
+        sensitiveDataFindings;
+
+        
     // ===============================
     // CONSOLE
     // ===============================

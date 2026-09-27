@@ -142,11 +142,15 @@ if (!tabId) {
             const scriptIframeFindings =
                 scan.scriptIframeFindings || [];
 
+            const sensitiveDataFindings =
+                scan.sensitiveDataFindings || [];
+
             const findings = [
                 ...urlFindings,
                 ...domFindings,
                 ...formFindings,
-                ...scriptIframeFindings
+                ...scriptIframeFindings,
+                ...sensitiveDataFindings
             ];
 
 

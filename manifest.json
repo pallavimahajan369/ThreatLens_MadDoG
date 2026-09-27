@@ -25,6 +25,7 @@
             "content/dom-security.js",
             "content/form-security.js",
             "content/script-iframe-security.js",
+            "content/sensitive-data-security.js",
             "content/content.js"
         ],
       "run_at": "document_idle"
