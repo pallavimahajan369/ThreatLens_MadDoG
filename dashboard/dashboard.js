@@ -1,3 +1,4 @@
+
 console.log("SentinelAI Dashboard loaded");
 
 
@@ -24,11 +25,17 @@ if (!tabId) {
 } else {
 
     chrome.storage.local.get(
-        `scan_${tabId}`,
+        [
+            `scan_${tabId}`,
+            "extensionScan"
+        ],
         (result) => {
 
             const scan =
                 result[`scan_${tabId}`];
+
+            const extensionScan =
+                result.extensionScan || [];
 
 
             if (!scan) {
@@ -39,12 +46,13 @@ if (!tabId) {
                 );
 
                 return;
+
             }
 
 
-            // ===============================
+            // ==================================
             // WEBSITE
-            // ===============================
+            // ==================================
 
             document.getElementById(
                 "websiteUrl"
@@ -54,9 +62,9 @@ if (!tabId) {
                 "Unknown";
 
 
-            // ===============================
+            // ==================================
             // BASIC DOM INFORMATION
-            // ===============================
+            // ==================================
 
             document.getElementById(
                 "formsCount"
@@ -82,9 +90,9 @@ if (!tabId) {
                 "Available";
 
 
-            // ===============================
+            // ==================================
             // PHISHING RISK
-            // ===============================
+            // ==================================
 
             const phishingRisk =
                 scan.phishingRisk;
@@ -107,11 +115,145 @@ if (!tabId) {
             }
 
 
-            // ===============================
-            // OVERALL RISK
-            // ===============================
+            // ==================================
+            // PROMPT INJECTION
+            // ==================================
 
-            let overallRisk = "LOW";
+            const promptFindings =
+                scan.promptInjectionFindings || [];
+
+
+            const promptInjectionDetected =
+                promptFindings.some(
+                    finding =>
+                        finding.type !==
+                        "NO_PROMPT_INJECTION"
+                );
+
+
+            document.getElementById(
+                "promptStatus"
+            ).textContent =
+                promptInjectionDetected
+                    ? "Possible Injection"
+                    : "No injection detected";
+
+
+            // ==================================
+            // EXTENSION SECURITY
+            // ==================================
+
+            document.getElementById(
+                "extensionCount"
+            ).textContent =
+                extensionScan.length;
+
+
+            // ----------------------------------
+            // Permission Count
+            // ----------------------------------
+
+            let totalPermissions = 0;
+
+
+            extensionScan.forEach(
+                extension => {
+
+                    totalPermissions +=
+                        (
+                            extension.permissions || []
+                        ).length;
+
+                }
+            );
+
+
+            document.getElementById(
+                "permissionCount"
+            ).textContent =
+                totalPermissions;
+
+
+            // ----------------------------------
+            // Extension Risk
+            // ----------------------------------
+
+            const hasHighRiskExtension =
+                extensionScan.some(
+                    extension =>
+                        extension.risk === "HIGH"
+                );
+
+
+            const hasMediumRiskExtension =
+                extensionScan.some(
+                    extension =>
+                        extension.risk === "MEDIUM"
+                );
+
+
+            let extensionOverallRisk =
+                "LOW";
+
+
+            if (hasHighRiskExtension) {
+
+                extensionOverallRisk =
+                    "HIGH";
+
+            } else if (
+                hasMediumRiskExtension
+            ) {
+
+                extensionOverallRisk =
+                    "MEDIUM";
+
+            }
+
+
+            document.getElementById(
+                "extensionRisk"
+            ).textContent =
+                extensionOverallRisk;
+
+
+            document.getElementById(
+                "extensionRiskDetail"
+            ).textContent =
+                extensionOverallRisk;
+
+
+            // ----------------------------------
+            // Extension Findings
+            // ----------------------------------
+
+            let extensionFindingCount = 0;
+
+
+            extensionScan.forEach(
+                extension => {
+
+                    extensionFindingCount +=
+                        (
+                            extension.findings || []
+                        ).length;
+
+                }
+            );
+
+
+            document.getElementById(
+                "extensionFindings"
+            ).textContent =
+                extensionFindingCount;
+
+
+            // ==================================
+            // OVERALL WEBSITE RISK
+            // ==================================
+
+            let overallRisk =
+                "LOW";
 
 
             if (
@@ -137,60 +279,9 @@ if (!tabId) {
                 overallRisk;
 
 
-            document.getElementById(
-                "extensionRisk"
-            ).textContent =
-                "LOW";
-
-
-            // ===============================
-            // OTHER STATUS
-            // ===============================
-
-            const promptFindings =
-                scan.promptInjectionFindings || [];
-
-            const promptInjectionDetected =
-                promptFindings.some(
-                    finding =>
-                        finding.type !== "NO_PROMPT_INJECTION"
-                );
-
-            document.getElementById(
-                "promptStatus"
-            ).textContent =
-                promptInjectionDetected
-                    ? "Possible Injection"
-                    : "No injection detected";
-
-
-            document.getElementById(
-                "extensionCount"
-            ).textContent =
-                "Not analyzed";
-
-
-            document.getElementById(
-                "permissionCount"
-            ).textContent =
-                "Not analyzed";
-
-
-            document.getElementById(
-                "extensionRiskDetail"
-            ).textContent =
-                "LOW";
-
-
-            document.getElementById(
-                "extensionFindings"
-            ).textContent =
-                "0";
-
-
-            // ===============================
-            // FINDINGS
-            // ===============================
+            // ==================================
+            // ALL WEBSITE FINDINGS
+            // ==================================
 
             const urlFindings =
                 scan.urlFindings || [];
@@ -223,15 +314,15 @@ if (!tabId) {
                 ...scriptIframeFindings,
 
                 ...sensitiveDataFindings,
-                
+
                 ...promptFindings
 
             ];
 
 
-            // ===============================
+            // ==================================
             // URL FINDINGS COUNT
-            // ===============================
+            // ==================================
 
             const urlFindingsElement =
                 document.getElementById(
@@ -247,9 +338,9 @@ if (!tabId) {
             }
 
 
-            // ===============================
+            // ==================================
             // FINDINGS CONTAINER
-            // ===============================
+            // ==================================
 
             const findingsContainer =
                 document.getElementById(
@@ -277,59 +368,62 @@ if (!tabId) {
             findingsContainer.innerHTML = "";
 
 
-            // ===============================
+            // ==================================
             // DISPLAY FINDINGS
-            // ===============================
+            // ==================================
 
-            findings.forEach((finding) => {
+            findings.forEach(
+                (finding) => {
 
-                const item =
-                    document.createElement(
-                        "div"
+                    const item =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    item.className =
+                        "finding-item";
+
+
+                    const severity =
+                        document.createElement(
+                            "strong"
+                        );
+
+
+                    severity.textContent =
+                        finding.severity;
+
+
+                    const reason =
+                        document.createElement(
+                            "span"
+                        );
+
+
+                    reason.textContent =
+                        finding.reason;
+
+
+                    item.appendChild(
+                        severity
                     );
 
 
-                item.className =
-                    "finding-item";
-
-
-                const severity =
-                    document.createElement(
-                        "strong"
+                    item.appendChild(
+                        reason
                     );
 
 
-                severity.textContent =
-                    finding.severity;
-
-
-                const reason =
-                    document.createElement(
-                        "span"
+                    findingsContainer.appendChild(
+                        item
                     );
 
-
-                reason.textContent =
-                    finding.reason;
-
-
-                item.appendChild(
-                    severity
-                );
-
-
-                item.appendChild(
-                    reason
-                );
-
-
-                findingsContainer.appendChild(
-                    item
-                );
-
-            });
+                }
+            );
 
         }
     );
 
 }
+
