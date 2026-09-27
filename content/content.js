@@ -37,6 +37,10 @@ function scanPage(reason = "page-load") {
 
     result.urlFindings = urlFindings;
 
+    const domFindings = analyzeDOM();
+
+    result.domFindings = domFindings;
+
 
     // ===============================
     // CONSOLE
@@ -61,3 +65,6 @@ function scanPage(reason = "page-load") {
     });
 
 }
+
+// START INITIAL SCAN
+scanPage("page-load");

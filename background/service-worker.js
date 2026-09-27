@@ -1,6 +1,5 @@
 console.log("SentinelAI service worker started");
 
-
 chrome.runtime.onMessage.addListener(
     (message, sender, sendResponse) => {
 
@@ -9,26 +8,27 @@ chrome.runtime.onMessage.addListener(
             message
         );
 
-
         if (message.type === "SCAN_RESULT") {
 
-            const scanData = message.data;
+            const tabId = sender.tab?.id;
 
+            if (tabId === undefined) {
+                return;
+            }
 
             chrome.storage.local.set({
 
-                lastScan: scanData
+                lastScan: message.data,
+
+                [`scan_${tabId}`]: message.data
 
             });
 
-
             console.log(
-                "Scan result stored:",
-                scanData
+                "Scan result stored for tab:",
+                tabId
             );
         }
 
-
-        return true;
     }
 );
