@@ -100,11 +100,34 @@ document.getElementById("dashboardBtn").addEventListener(
     "click",
     () => {
 
-        chrome.tabs.create({
-            url: chrome.runtime.getURL(
-                "dashboard/dashboard.html"
-            )
-        });
+        chrome.tabs.query(
+            {
+                active: true,
+                currentWindow: true
+            },
+            (tabs) => {
+
+                if (!tabs || !tabs.length) {
+                    return;
+                }
+
+                const currentTab = tabs[0];
+
+                const dashboardUrl =
+                    chrome.runtime.getURL(
+                        "dashboard/dashboard.html"
+                    ) +
+                    "?url=" +
+                    encodeURIComponent(
+                        currentTab.url || ""
+                    );
+
+                chrome.tabs.create({
+                    url: dashboardUrl
+                });
+
+            }
+        );
 
     }
 );

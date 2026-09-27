@@ -1,115 +1,63 @@
-console.log("SentinelAI loaded");
+function scanPage(reason = "page-load") {
 
-let lastUrl = window.location.href;
+    const currentURL = window.location.href;
 
 
-// ------------------------------------
-// PAGE SCAN
-// ------------------------------------
-
-function scanPage(reason = "initial") {
+    // ===============================
+    // BASIC PAGE INFORMATION
+    // ===============================
 
     const result = {
-        url: window.location.href,
+
+        url: currentURL,
+
         title: document.title,
+
         forms: document.forms.length,
+
         scripts: document.scripts.length,
-        iframes: document.querySelectorAll("iframe").length,
-        timestamp: new Date().toISOString(),
+
+        iframes:
+            document.querySelectorAll("iframe").length,
+
+        timestamp:
+            new Date().toISOString(),
+
         reason: reason
     };
 
-    console.log("SentinelAI Scan Result:", result);
+
+    // ===============================
+    // URL SECURITY ANALYSIS
+    // ===============================
+
+    const urlFindings =
+        analyzeURL(currentURL);
 
 
-    // Send result safely to Service Worker
+    result.urlFindings = urlFindings;
 
-    try {
 
-        chrome.runtime.sendMessage(
-            {
-                type: "SCAN_RESULT",
-                data: result
-            },
-            () => {
+    // ===============================
+    // CONSOLE
+    // ===============================
 
-                if (chrome.runtime.lastError) {
+    console.log(
+        "SentinelAI Scan Result:",
+        result
+    );
 
-                    console.log(
-                        "SentinelAI message error:",
-                        chrome.runtime.lastError.message
-                    );
 
-                }
+    // ===============================
+    // SEND TO SERVICE WORKER
+    // ===============================
 
-            }
-        );
+    chrome.runtime.sendMessage({
 
-    } catch (error) {
+        type: "SCAN_RESULT",
 
-        console.log(
-            "SentinelAI communication error:",
-            error.message
-        );
+        data: result
 
-    }
+    });
+
 }
-
-
-// ------------------------------------
-// INITIAL AUTOMATIC SCAN
-// ------------------------------------
-
-scanPage("page-load");
-
-
-// ------------------------------------
-// DOM CHANGE MONITORING
-// ------------------------------------
-
-let scanTimer;
-
-const observer = new MutationObserver(() => {
-
-    clearTimeout(scanTimer);
-
-    scanTimer = setTimeout(() => {
-
-        scanPage("dom-change");
-
-    }, 1000);
-
-});
-
-
-observer.observe(
-    document.documentElement,
-    {
-        childList: true,
-        subtree: true
-    }
-);
-
-
-// ------------------------------------
-// URL CHANGE DETECTION
-// ------------------------------------
-
-setInterval(() => {
-
-    const currentUrl = window.location.href;
-
-
-    if (currentUrl !== lastUrl) {
-
-        lastUrl = currentUrl;
-
-        console.log(
-            "SentinelAI detected URL change"
-        );
-
-        scanPage("url-change");
-
-    }
-
-}, 1000);
