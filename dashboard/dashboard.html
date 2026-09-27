@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SentinelAI Dashboard</title>
+
+    <link rel="stylesheet" href="dashboard.css">
+
+</head>
+
+<body>
+
+    <!-- HEADER -->
+
+    <header class="header">
+
+        <div>
+            <h1>🛡 SentinelAI</h1>
+            <p>Security Investigation Dashboard</p>
+        </div>
+
+        <div class="protection">
+            ● Protection ON
+        </div>
+
+    </header>
+
+
+    <main>
+
+
+        <!-- ========================= -->
+        <!-- OVERVIEW -->
+        <!-- ========================= -->
+
+        <section>
+
+            <h2>Overview</h2>
+
+            <div class="overview-grid">
+
+                <div class="card">
+
+                    <span>Overall Risk</span>
+
+                    <strong id="overallRisk">
+                        LOW
+                    </strong>
+
+                </div>
+
+
+                <div class="card">
+
+                    <span>Website Security</span>
+
+                    <strong id="websiteRisk">
+                        LOW
+                    </strong>
+
+                </div>
+
+
+                <div class="card">
+
+                    <span>Extension Security</span>
+
+                    <strong id="extensionRisk">
+                        LOW
+                    </strong>
+
+                </div>
+
+
+                <div class="card">
+
+                    <span>Privacy Status</span>
+
+                    <strong id="privacyStatus">
+                        PROTECTED
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ========================= -->
+        <!-- WEBSITE SECURITY -->
+        <!-- ========================= -->
+
+        <section>
+
+            <h2>Website Security</h2>
+
+            <div class="website-card">
+
+                <div class="url">
+
+                    <span>URL</span>
+
+                    <strong id="websiteUrl">
+                        Loading...
+                    </strong>
+
+                </div>
+
+
+                <div class="security-grid">
+
+                    <div>
+                        <span>DOM</span>
+                        <strong id="domStatus">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Forms</span>
+                        <strong id="formsCount">0</strong>
+                    </div>
+
+                    <div>
+                        <span>Scripts</span>
+                        <strong id="scriptsCount">0</strong>
+                    </div>
+
+                    <div>
+                        <span>Iframes</span>
+                        <strong id="iframesCount">0</strong>
+                    </div>
+
+                    <div>
+                        <span>Phishing</span>
+                        <strong id="phishingStatus">Not detected</strong>
+                    </div>
+
+                    <div>
+                        <span>Prompt Injection</span>
+                        <strong id="promptStatus">Not detected</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ========================= -->
+        <!-- EXTENSION SECURITY -->
+        <!-- ========================= -->
+
+        <section>
+
+            <h2>Extension Security</h2>
+
+            <div class="extension-card">
+
+                <div class="extension-row">
+
+                    <span>Installed Extensions</span>
+
+                    <strong id="extensionCount">
+                        0
+                    </strong>
+
+                </div>
+
+
+                <div class="extension-row">
+
+                    <span>Permissions</span>
+
+                    <strong id="permissionCount">
+                        0
+                    </strong>
+
+                </div>
+
+
+                <div class="extension-row">
+
+                    <span>Risk</span>
+
+                    <strong id="extensionRiskDetail">
+                        LOW
+                    </strong>
+
+                </div>
+
+
+                <div class="extension-row">
+
+                    <span>Findings</span>
+
+                    <strong id="extensionFindings">
+                        0
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ========================= -->
+        <!-- AI ANALYSIS -->
+        <!-- ========================= -->
+
+        <section>
+
+            <h2>AI Analysis</h2>
+
+            <div class="ai-card">
+
+                <div>
+
+                    <h3>Why suspicious?</h3>
+
+                    <p id="aiReason">
+                        No suspicious activity detected.
+                    </p>
+
+                </div>
+
+
+                <div>
+
+                    <h3>Explanation</h3>
+
+                    <p id="aiExplanation">
+                        AI analysis will appear here.
+                    </p>
+
+                </div>
+
+
+                <div>
+
+                    <h3>Recommended Action</h3>
+
+                    <p id="aiAction">
+                        Continue browsing normally.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ========================= -->
+        <!-- SETTINGS -->
+        <!-- ========================= -->
+
+        <section>
+
+            <h2>Settings</h2>
+
+            <div class="settings-card">
+
+                <div class="setting-row">
+
+                    <span>AI Analysis</span>
+
+                    <strong>ON</strong>
+
+                </div>
+
+
+                <div class="setting-row">
+
+                    <span>Privacy Mode</span>
+
+                    <strong>ON</strong>
+
+                </div>
+
+
+                <div class="setting-row">
+
+                    <span>Scan Settings</span>
+
+                    <strong>Automatic</strong>
+
+                </div>
+
+
+                <div class="setting-row">
+
+                    <span>Local-only Mode</span>
+
+                    <strong>OFF</strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+    </main>
+
+
+    <script src="dashboard.js"></script>
+
+</body>
+
+</html>

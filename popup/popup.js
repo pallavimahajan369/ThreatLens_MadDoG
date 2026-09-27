@@ -96,15 +96,15 @@ document.getElementById(
 // Dashboard
 // ------------------------------------
 
-document.getElementById(
-    "dashboardBtn"
-).addEventListener(
+document.getElementById("dashboardBtn").addEventListener(
     "click",
     () => {
 
-        alert(
-            "Security dashboard will be implemented later."
-        );
+        chrome.tabs.create({
+            url: chrome.runtime.getURL(
+                "dashboard/dashboard.html"
+            )
+        });
 
     }
 );
