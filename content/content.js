@@ -41,6 +41,10 @@ function scanPage(reason = "page-load") {
 
     result.domFindings = domFindings;
 
+    const formFindings = analyzeFormSecurity();
+
+    result.formFindings = formFindings;
+
 
     // ===============================
     // CONSOLE

@@ -136,9 +136,13 @@ if (!tabId) {
             const domFindings =
                 scan.domFindings || [];
 
+            const formFindings =
+                scan.formFindings || [];
+
             const findings = [
                 ...urlFindings,
-                ...domFindings
+                ...domFindings,
+                ...formFindings
             ];
 
 
