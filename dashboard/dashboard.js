@@ -252,34 +252,84 @@ if (!tabId) {
             // OVERALL WEBSITE RISK
             // ==================================
 
-            let overallRisk =
-                "LOW";
+            const calculatedRisk =
+                scan.risk?.level ||
+                "SAFE";
 
 
-            if (
-                phishingRisk &&
-                phishingRisk.risk
-            ) {
-
-                overallRisk =
-                    phishingRisk.risk;
-
-            }
+            const finalOverallRisk =
+                scan.overallRisk ||
+                calculatedRisk;
 
 
             document.getElementById(
                 "overallRisk"
             ).textContent =
-                overallRisk;
+                finalOverallRisk;
 
 
             document.getElementById(
                 "websiteRisk"
             ).textContent =
-                overallRisk;
+                calculatedRisk;
+
+            const riskReasonElement =
+                document.getElementById(
+                    "aiReason"
+                );
 
 
-            // ==================================
+            if (riskReasonElement) {
+
+                const websiteReasons =
+                    scan.risk?.reasons || [];
+
+
+                const extensionReasons =
+                    scan.extensionRiskReasons || [];
+
+
+                const allReasons = [
+                    ...websiteReasons,
+                    ...extensionReasons
+                ];
+
+
+                if (allReasons.length === 0) {
+
+                    riskReasonElement.textContent =
+                        "No significant security indicators detected.";
+
+                } else {
+
+                    riskReasonElement.innerHTML = "";
+
+
+                    allReasons.forEach(
+                        reason => {
+
+                            const item =
+                                document.createElement(
+                                    "div"
+                                );
+
+
+                            item.textContent =
+                                "• " + reason;
+
+
+                            riskReasonElement.appendChild(
+                                item
+                            );
+
+                        }
+                    );
+
+                }
+
+            }
+
+                        // ==================================
             // ALL WEBSITE FINDINGS
             // ==================================
 

@@ -75,6 +75,60 @@ function scanPage(reason = "page-load") {
     result.phishingRisk =
         phishingRisk;
 
+    // ===============================
+    // RISK ENGINE
+    // ===============================
+
+    const allFindings = [
+
+        ...normalizeFindings(
+            urlFindings,
+            "URL"
+        ),
+
+        ...normalizeFindings(
+            domFindings,
+            "DOM"
+        ),
+
+        ...normalizeFindings(
+            formFindings,
+            "FORM"
+        ),
+
+        ...normalizeFindings(
+            scriptIframeFindings,
+            "SCRIPT_IFRAME"
+        ),
+
+        ...normalizeFindings(
+            sensitiveDataFindings,
+            "SENSITIVE_DATA"
+        ),
+
+        ...normalizeFindings(
+            promptInjectionFindings,
+            "PROMPT_INJECTION"
+        )
+
+    ];
+
+
+    const riskResult =
+        calculateOverallRisk(
+            allFindings
+        );
+
+
+    result.risk = riskResult;
+
+
+    console.log(
+        "SentinelAI Risk Result:",
+        riskResult
+    );
+
+    
 
     // ===============================
     // CONSOLE

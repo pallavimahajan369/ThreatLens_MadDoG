@@ -29,6 +29,7 @@
             "content/sensitive-data-security.js",
             "content/phishing-security.js",
             "content/prompt-injection-security.js",
+            "content/risk-engine.js",
             "content/content.js"
         ],
       "run_at": "document_idle"

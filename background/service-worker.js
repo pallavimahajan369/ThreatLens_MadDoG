@@ -255,28 +255,175 @@ chrome.runtime.onMessage.addListener(
             message
         );
 
-        if (message.type === "SCAN_RESULT") {
+       if (
+            message.type ===
+            "SCAN_RESULT"
+        ) {
 
-            const tabId = sender.tab?.id;
+            const tabId =
+                sender.tab?.id;
 
-            if (tabId === undefined) {
+
+            if (
+                tabId === undefined
+            ) {
                 return;
             }
 
-            chrome.storage.local.set({
 
-                lastScan: message.data,
+            chrome.storage.local.get(
+                "extensionScan",
+                (result) => {
 
-                [`scan_${tabId}`]: message.data
+                    const extensionScan =
+                        result.extensionScan || [];
 
-            });
 
-            console.log(
-                "Scan result stored for tab:",
-                tabId
+                    message.data.extensionScan =
+                        extensionScan;
+                    
+                    const websiteRisk =
+                        message.data.risk?.level ||
+                        "SAFE";
+
+
+                    const combinedRisk =
+                        calculateCombinedRisk(
+                            websiteRisk,
+                            extensionScan
+                        );
+
+
+                    message.data.overallRisk =
+                        combinedRisk;
+                    
+                    const extensionRiskReasons =
+                        collectExtensionRiskReasons(
+                            extensionScan
+                        );
+
+
+                    message.data.extensionRiskReasons =
+                        extensionRiskReasons;
+
+
+                    chrome.storage.local.set({
+
+                        lastScan:
+                            message.data,
+
+                        [`scan_${tabId}`]:
+                            message.data
+
+                    });
+
+
+                    console.log(
+                        "Scan result stored for tab:",
+                        tabId
+                    );
+
+                }
             );
+
         }
 
     }
 );
+
+function calculateCombinedRisk(
+    websiteRisk,
+    extensionScan
+) {
+
+    const extensionRisks =
+        extensionScan || [];
+
+    const hasHighExtension =
+        extensionRisks.some(
+            extension =>
+                extension.risk === "HIGH"
+        );
+
+    const hasMediumExtension =
+        extensionRisks.some(
+            extension =>
+                extension.risk === "MEDIUM"
+        );
+
+    let overallRisk =
+        websiteRisk || "SAFE";
+
+    // Do not automatically raise the website risk
+    // only because a high-risk extension is installed.
+    //
+    // Extension risk is already shown separately.
+    // Combined risk should increase only when
+    // there is a meaningful website + extension
+    // combination that we explicitly define.
+
+    if (
+        websiteRisk === "CRITICAL"
+    ) {
+        overallRisk = "CRITICAL";
+    }
+    else if (
+        websiteRisk === "HIGH"
+    ) {
+        overallRisk = "HIGH";
+    }
+    else if (
+        websiteRisk === "MEDIUM"
+    ) {
+        overallRisk = "MEDIUM";
+    }
+    else if (
+        websiteRisk === "LOW"
+    ) {
+        overallRisk = "LOW";
+    }
+    else {
+        overallRisk = "SAFE";
+    }
+
+    return overallRisk;
+}
+
+function collectExtensionRiskReasons(
+    extensionScan
+) {
+
+    const reasons = [];
+
+
+    (extensionScan || []).forEach(
+        extension => {
+
+            (extension.findings || [])
+                .forEach(
+                    finding => {
+
+                        if (
+                            finding.severity === "HIGH" ||
+                            finding.severity === "MEDIUM"
+                        ) {
+
+                            reasons.push(
+                                `${extension.name}: ${finding.reason}`
+                            );
+
+                        }
+
+                    }
+                );
+
+        }
+    );
+
+
+    return [
+        ...new Set(reasons)
+    ];
+
+}
 scanInstalledExtensions();
