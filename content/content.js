@@ -57,7 +57,13 @@ function scanPage(reason = "page-load") {
     result.sensitiveDataFindings =
         sensitiveDataFindings;
 
-      
+    const promptInjectionFindings =
+        analyzePromptInjection();
+
+    result.promptInjectionFindings =
+        promptInjectionFindings;
+    
+    
     const phishingRisk =
         analyzePhishingRisk(
             urlFindings,
@@ -69,7 +75,7 @@ function scanPage(reason = "page-load") {
     result.phishingRisk =
         phishingRisk;
 
-        
+
     // ===============================
     // CONSOLE
     // ===============================

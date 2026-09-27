@@ -27,6 +27,7 @@
             "content/script-iframe-security.js",
             "content/sensitive-data-security.js",
             "content/phishing-security.js",
+            "content/prompt-injection-security.js",
             "content/content.js"
         ],
       "run_at": "document_idle"

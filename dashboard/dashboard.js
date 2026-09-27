@@ -147,10 +147,21 @@ if (!tabId) {
             // OTHER STATUS
             // ===============================
 
+            const promptFindings =
+                scan.promptInjectionFindings || [];
+
+            const promptInjectionDetected =
+                promptFindings.some(
+                    finding =>
+                        finding.type !== "NO_PROMPT_INJECTION"
+                );
+
             document.getElementById(
                 "promptStatus"
             ).textContent =
-                "Not analyzed";
+                promptInjectionDetected
+                    ? "Possible Injection"
+                    : "No injection detected";
 
 
             document.getElementById(
@@ -211,7 +222,9 @@ if (!tabId) {
 
                 ...scriptIframeFindings,
 
-                ...sensitiveDataFindings
+                ...sensitiveDataFindings,
+                
+                ...promptFindings
 
             ];
 
