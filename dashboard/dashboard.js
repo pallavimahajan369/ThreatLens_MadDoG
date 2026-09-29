@@ -27,7 +27,8 @@ if (!tabId) {
     chrome.storage.local.get(
         [
             `scan_${tabId}`,
-            "extensionScan"
+            "extensionScan",
+            `ai_analysis_${tabId}`
         ],
         (result) => {
 
@@ -36,6 +37,9 @@ if (!tabId) {
 
             const extensionScan =
                 result.extensionScan || [];
+
+            const aiAnalysis =
+                result[`ai_analysis_${tabId}`] || null; 
 
 
             if (!scan) {
@@ -329,7 +333,222 @@ if (!tabId) {
 
             }
 
-                        // ==================================
+            // ==================================
+            // AI ANALYSIS
+            // ==================================
+
+            const aiSummaryElement =
+                document.getElementById(
+                    "aiSummary"
+                );
+
+            const aiWhyElement =
+                document.getElementById(
+                    "aiWhy"
+                );
+
+            const aiRecommendationsElement =
+                document.getElementById(
+                    "aiRecommendations"
+                );
+
+            const aiUserMessageElement =
+                document.getElementById(
+                    "aiUserMessage"
+                );
+
+
+            if (
+                aiAnalysis &&
+                aiAnalysis.success &&
+                aiAnalysis.analysis
+            ) {
+
+                const analysis =
+                    aiAnalysis.analysis;
+
+
+                // -------------------------------
+                // Summary
+                // -------------------------------
+
+                if (aiSummaryElement) {
+
+                    aiSummaryElement.textContent =
+                        analysis.summary ||
+                        "No AI summary available.";
+
+                }
+
+
+                // -------------------------------
+                // Why suspicious?
+                // -------------------------------
+
+                if (aiWhyElement) {
+
+                    aiWhyElement.innerHTML = "";
+
+
+                    const why =
+                        Array.isArray(
+                            analysis.why
+                        )
+                            ? analysis.why
+                            : [];
+
+
+                    if (why.length === 0) {
+
+                        aiWhyElement.textContent =
+                            "No additional explanation available.";
+
+                    } else {
+
+                        why.forEach(
+                            reason => {
+
+                                const item =
+                                    document.createElement(
+                                        "div"
+                                    );
+
+                                item.textContent =
+                                    "• " + reason;
+
+                                aiWhyElement.appendChild(
+                                    item
+                                );
+
+                            }
+                        );
+
+                    }
+
+                }
+
+
+                // -------------------------------
+                // Recommendations
+                // -------------------------------
+
+                if (aiRecommendationsElement) {
+
+                    aiRecommendationsElement.innerHTML =
+                        "";
+
+
+                    const recommendations =
+                        Array.isArray(
+                            analysis.recommendations
+                        )
+                            ? analysis.recommendations
+                            : [];
+
+
+                    if (
+                        recommendations.length === 0
+                    ) {
+
+                        aiRecommendationsElement.textContent =
+                            "No specific recommendations available.";
+
+                    } else {
+
+                        recommendations.forEach(
+                            recommendation => {
+
+                                const item =
+                                    document.createElement(
+                                        "div"
+                                    );
+
+
+                                const priority =
+                                    recommendation.priority ||
+                                    "INFO";
+
+
+                                const action =
+                                    recommendation.action ||
+                                    "No action provided";
+
+
+                                item.textContent =
+                                    `• ${priority}: ${action}`;
+
+
+                                aiRecommendationsElement.appendChild(
+                                    item
+                                );
+
+                            }
+                        );
+
+                    }
+
+                }
+
+
+                // -------------------------------
+                // User Message
+                // -------------------------------
+
+                if (aiUserMessageElement) {
+
+                    aiUserMessageElement.textContent =
+                        analysis.user_message ||
+                        "No additional message available.";
+
+                }
+
+            }
+            else if (
+                aiAnalysis &&
+                aiAnalysis.success === false
+            ) {
+
+                if (aiSummaryElement) {
+
+                    aiSummaryElement.textContent =
+                        "AI analysis is temporarily unavailable. Local security analysis is still active.";
+
+                }
+
+                if (aiWhyElement) {
+
+                    aiWhyElement.textContent =
+                        "";
+
+                }
+
+                if (aiRecommendationsElement) {
+
+                    aiRecommendationsElement.textContent =
+                        "";
+
+                }
+
+                if (aiUserMessageElement) {
+
+                    aiUserMessageElement.textContent =
+                        "You can continue using SentinelAI. Core security detection does not depend on AI.";
+
+                }
+
+            }
+            else {
+
+                if (aiSummaryElement) {
+
+                    aiSummaryElement.textContent =
+                        "AI analysis is not available for this scan.";
+
+                }
+
+            }
+
+            // ==================================
             // ALL WEBSITE FINDINGS
             // ==================================
 
