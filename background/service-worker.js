@@ -1,4 +1,5 @@
-console.log("SentinelAI service worker started");
+importScripts("../content/ai-sanitizer.js");
+
 console.log("SentinelAI service worker started");
 
 
@@ -265,7 +266,8 @@ chrome.runtime.onMessage.addListener(
 
 
             if (
-                tabId === undefined
+                tabId === undefined ||
+                tabId < 0
             ) {
                 return;
             }
@@ -305,6 +307,36 @@ chrome.runtime.onMessage.addListener(
 
                     message.data.extensionRiskReasons =
                         extensionRiskReasons;
+
+                    console.log(
+                        "SentinelAI: Building AI payload in Service Worker"
+                    );
+
+                    const aiPayload =
+                        buildAISecurityPayload(
+                            message.data
+                        );
+
+                    message.data.aiPayload =
+                        aiPayload;
+
+                    console.log(
+                        "SentinelAI AI-Safe Payload:",
+                        aiPayload
+                    );
+
+                    if (
+                        aiPayload.overallRisk === "HIGH" ||
+                        aiPayload.overallRisk === "CRITICAL"
+                    ) {
+
+                        requestAIAnalysis(
+                            aiPayload,
+                            tabId
+                        );
+
+                    }
+                    
 
 
                     chrome.storage.local.set({
@@ -426,4 +458,93 @@ function collectExtensionRiskReasons(
     ];
 
 }
+async function requestAIAnalysis(
+    aiPayload,
+    tabId
+) {
+
+    try {
+
+        console.log(
+            "SentinelAI: Sending sanitized payload to AI backend"
+        );
+
+        const response =
+            await fetch(
+                "http://localhost:3000/api/analyze",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify(
+                            aiPayload
+                        )
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                `AI backend returned HTTP ${response.status}`
+            );
+
+        }
+
+
+        const result =
+            await response.json();
+
+
+        console.log(
+            "SentinelAI: AI analysis received:",
+            result
+        );
+
+
+        await chrome.storage.local.set({
+
+            [`ai_analysis_${tabId}`]:
+                result
+
+        });
+
+
+        console.log(
+            "SentinelAI: AI analysis stored for tab:",
+            tabId
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "SentinelAI: AI analysis failed:",
+            error
+        );
+
+
+        await chrome.storage.local.set({
+
+            [`ai_analysis_${tabId}`]: {
+
+                success: false,
+
+                error:
+                    "AI analysis temporarily unavailable"
+
+            }
+
+        });
+
+    }
+
+}
+
+
 scanInstalledExtensions();

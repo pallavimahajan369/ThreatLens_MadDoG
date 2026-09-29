@@ -10,6 +10,10 @@
     "management"
   ],
 
+  "host_permissions": [
+    "http://localhost:3000/*"
+  ],
+
   "action": {
     "default_popup": "popup/popup.html"
   },
@@ -22,16 +26,17 @@
     {
       "matches": ["<all_urls>"],
       "js": [
-            "content/url-security.js",
-            "content/dom-security.js",
-            "content/form-security.js",
-            "content/script-iframe-security.js",
-            "content/sensitive-data-security.js",
-            "content/phishing-security.js",
-            "content/prompt-injection-security.js",
-            "content/risk-engine.js",
-            "content/content.js"
-        ],
+        "content/url-security.js",
+        "content/dom-security.js",
+        "content/form-security.js",
+        "content/script-iframe-security.js",
+        "content/sensitive-data-security.js",
+        "content/phishing-security.js",
+        "content/prompt-injection-security.js",
+        "content/risk-engine.js",
+        "content/ai-sanitizer.js",
+        "content/content.js"
+      ],
       "run_at": "document_idle"
     }
   ]

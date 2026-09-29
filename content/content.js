@@ -130,6 +130,8 @@ function scanPage(reason = "page-load") {
 
     
 
+    
+
     // ===============================
     // CONSOLE
     // ===============================
@@ -139,6 +141,14 @@ function scanPage(reason = "page-load") {
         result
     );
 
+    chrome.runtime.sendMessage({
+        type: "SCAN_RESULT",
+        data: result
+    });
+
+    console.log(
+        "SentinelAI: SCAN_RESULT message sent to Service Worker"
+    );
 
     // ===============================
     // SEND TO SERVICE WORKER
