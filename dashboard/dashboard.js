@@ -250,7 +250,131 @@ if (!tabId) {
                 "extensionFindings"
             ).textContent =
                 extensionFindingCount;
+            
+            // EXTENSION FINDINGS DETAILS
+            const extensionFindingsContainer =
+                document.getElementById("extensionFindingsContainer");
 
+            if (extensionFindingsContainer) {
+
+                extensionFindingsContainer.replaceChildren();
+
+                if (extensionScan.length === 0) {
+
+                    extensionFindingsContainer.textContent =
+                        "No installed extensions found.";
+
+                } else {
+
+                    extensionScan.forEach(extension => {
+
+                        const extensionCard =
+                            document.createElement("div");
+
+                        extensionCard.className =
+                            "extension-finding-card";
+
+
+                        // Extension Name
+                        const extensionName =
+                            document.createElement("h4");
+
+                        extensionName.textContent =
+                            extension.name || "Unknown Extension";
+
+                        extensionCard.appendChild(
+                            extensionName
+                        );
+
+
+                        // Risk
+                        const risk =
+                            document.createElement("p");
+
+                        risk.textContent =
+                            `Risk: ${extension.risk || "LOW"}`;
+
+                        extensionCard.appendChild(
+                            risk
+                        );
+
+
+                        // Findings
+                        const findingsTitle =
+                            document.createElement("strong");
+
+                        findingsTitle.textContent =
+                            "Findings:";
+
+                        extensionCard.appendChild(
+                            findingsTitle
+                        );
+
+
+                        const findings =
+                            extension.findings || [];
+
+
+                        if (findings.length === 0) {
+
+                            const noFindings =
+                                document.createElement("p");
+
+                            noFindings.textContent =
+                                "No specific findings detected.";
+
+                            extensionCard.appendChild(
+                                noFindings
+                            );
+
+                        } else {
+
+                            findings.forEach(finding => {
+
+                                const findingItem =
+                                    document.createElement("div");
+
+                                findingItem.className =
+                                    "extension-finding-item";
+
+                                const severity =
+                                    document.createElement("strong");
+
+                                severity.textContent =
+                                    finding.severity || "LOW";
+
+                                const reason =
+                                    document.createElement("span");
+
+                                reason.textContent =
+                                    finding.reason ||
+                                    "No reason provided";
+
+                                findingItem.appendChild(
+                                    severity
+                                );
+
+                                findingItem.appendChild(
+                                    document.createTextNode(" ")
+                                );
+
+                                findingItem.appendChild(
+                                    reason
+                                );
+
+                                extensionCard.appendChild(
+                                    findingItem
+                                );
+                            });
+                        }
+
+
+                        extensionFindingsContainer.appendChild(
+                            extensionCard
+                        );
+                    });
+                }
+            }
 
             // ==================================
             // OVERALL WEBSITE RISK

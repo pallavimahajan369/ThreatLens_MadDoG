@@ -340,3 +340,89 @@ h2 {
     }
 
 }
+
+/* ============================= */
+/* Extension Findings UI          */
+/* ============================= */
+
+.extension-findings-section {
+    margin-top: 24px;
+}
+
+.extension-findings-section h3 {
+    margin-bottom: 16px;
+}
+
+.extension-finding-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.extension-finding-card h4 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.extension-finding-card > p {
+    margin: 0 0 14px 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.extension-finding-card strong {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.extension-finding-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 10px;
+    margin-top: 7px;
+    background: #f8fafc;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.extension-finding-item strong {
+    display: inline-block;
+    min-width: 58px;
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+}
+
+.extension-finding-item span {
+    flex: 1;
+}
+
+
+/* Risk labels */
+
+.extension-finding-card h4::after {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-left: 8px;
+    border-radius: 50%;
+    background: #94a3b8;
+}
+
+
+/* Finding severity badges */
+
+.extension-finding-item strong {
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: #e2e8f0;
+}
