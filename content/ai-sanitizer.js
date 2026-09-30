@@ -6,6 +6,7 @@ function sanitizeFindings(findings) {
     return (findings || []).map((finding) => {
 
         return {
+
             category:
                 finding.category ||
                 "UNKNOWN",
@@ -24,9 +25,7 @@ function sanitizeFindings(findings) {
                     "No reason provided"
                 )
         };
-
     });
-
 }
 
 
@@ -39,9 +38,11 @@ function sanitizeReason(reason) {
     let sanitized =
         String(reason);
 
-    /*
-     * Remove JWT-like values
-     */
+
+    // ==================================
+    // Remove JWT-like values
+    // ==================================
+
     sanitized =
         sanitized.replace(
             /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
@@ -49,9 +50,10 @@ function sanitizeReason(reason) {
         );
 
 
-    /*
-     * Remove AWS access-key-like values
-     */
+    // ==================================
+    // Remove AWS access-key-like values
+    // ==================================
+
     sanitized =
         sanitized.replace(
             /\bAKIA[0-9A-Z]{16}\b/g,
@@ -59,9 +61,10 @@ function sanitizeReason(reason) {
         );
 
 
-    /*
-     * Remove common token / secret assignments
-     */
+    // ==================================
+    // Remove token / secret assignments
+    // ==================================
+
     sanitized =
         sanitized.replace(
             /\b(?:token|secret|api[_-]?key|access[_-]?token)\s*[:=]\s*["']?[A-Za-z0-9_\-./+=]{8,}["']?/gi,
@@ -69,9 +72,10 @@ function sanitizeReason(reason) {
         );
 
 
-    /*
-     * Remove password assignments
-     */
+    // ==================================
+    // Remove password assignments
+    // ==================================
+
     sanitized =
         sanitized.replace(
             /\b(?:password|passwd|pwd)\s*[:=]\s*["']?[^\s"']{6,}["']?/gi,
@@ -80,7 +84,6 @@ function sanitizeReason(reason) {
 
 
     return sanitized;
-
 }
 
 
@@ -97,7 +100,6 @@ function sanitizeCorrelations(correlations) {
             correlation =>
                 correlation.length > 0
         );
-
 }
 
 
@@ -106,15 +108,24 @@ function buildAISecurityPayload(scan) {
     if (!scan) {
 
         return {
-            overallRisk: "SAFE",
-            websiteRisk: "SAFE",
-            extensionRisk: "SAFE",
-            findings: [],
-            correlations: []
-        };
 
+            overallRisk: "SAFE",
+
+            websiteRisk: "SAFE",
+
+            extensionRisk: "SAFE",
+
+            findings: [],
+
+            correlations: []
+
+        };
     }
 
+
+    // ==================================
+    // Collect ONLY security findings
+    // ==================================
 
     const findings = [
 
@@ -149,6 +160,10 @@ function buildAISecurityPayload(scan) {
         );
 
 
+    // ==================================
+    // AI-SAFE PAYLOAD
+    // ==================================
+
     return {
 
         overallRisk:
@@ -180,5 +195,4 @@ function buildAISecurityPayload(scan) {
             sanitizedCorrelations
 
     };
-
 }

@@ -306,7 +306,7 @@ if (!tabId) {
 
                 } else {
 
-                    riskReasonElement.innerHTML = "";
+                    riskReasonElement.replaceChildren();
 
 
                     allReasons.forEach(
@@ -387,7 +387,7 @@ if (!tabId) {
 
                 if (aiWhyElement) {
 
-                    aiWhyElement.innerHTML = "";
+                    aiWhyElement.replaceChildren();
 
 
                     const why =
@@ -434,8 +434,7 @@ if (!tabId) {
 
                 if (aiRecommendationsElement) {
 
-                    aiRecommendationsElement.innerHTML =
-                        "";
+                    aiRecommendationsElement.replaceChildren();
 
 
                     const recommendations =
@@ -634,7 +633,7 @@ if (!tabId) {
             }
 
 
-            findingsContainer.innerHTML = "";
+            findingsContainer.replaceChildren();
 
 
             // ==================================

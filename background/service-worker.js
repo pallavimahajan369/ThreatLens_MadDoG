@@ -2,6 +2,13 @@ importScripts("../content/ai-sanitizer.js");
 
 console.log("SentinelAI service worker started");
 
+// Track tabs that currently have an AI request in progress
+const aiRequestsInProgress = new Set();
+
+
+// ==================================
+// EXTENSION SECURITY ANALYSIS
+// ==================================
 
 function analyzeExtensionSecurity(extension) {
 
@@ -13,6 +20,10 @@ function analyzeExtensionSecurity(extension) {
     const hostPermissions =
         extension.hostPermissions || [];
 
+
+    // ----------------------------------
+    // TABS
+    // ----------------------------------
 
     if (permissions.includes("tabs")) {
 
@@ -26,6 +37,10 @@ function analyzeExtensionSecurity(extension) {
     }
 
 
+    // ----------------------------------
+    // COOKIES
+    // ----------------------------------
+
     if (permissions.includes("cookies")) {
 
         findings.push({
@@ -37,6 +52,10 @@ function analyzeExtensionSecurity(extension) {
 
     }
 
+
+    // ----------------------------------
+    // WEB REQUEST
+    // ----------------------------------
 
     if (permissions.includes("webRequest")) {
 
@@ -50,6 +69,10 @@ function analyzeExtensionSecurity(extension) {
     }
 
 
+    // ----------------------------------
+    // SCRIPTING
+    // ----------------------------------
+
     if (permissions.includes("scripting")) {
 
         findings.push({
@@ -61,6 +84,10 @@ function analyzeExtensionSecurity(extension) {
 
     }
 
+
+    // ----------------------------------
+    // ALL URLS
+    // ----------------------------------
 
     const hasAllURLs =
         hostPermissions.some(
@@ -84,6 +111,10 @@ function analyzeExtensionSecurity(extension) {
     }
 
 
+    // ----------------------------------
+    // WEBPAGE MODIFICATION
+    // ----------------------------------
+
     if (
         permissions.includes("scripting") ||
         hasAllURLs
@@ -99,6 +130,10 @@ function analyzeExtensionSecurity(extension) {
     }
 
 
+    // ----------------------------------
+    // MULTIPLE HIGH-RISK PERMISSIONS
+    // ----------------------------------
+
     const highRiskPermissions = [
         "cookies",
         "webRequest",
@@ -108,8 +143,9 @@ function analyzeExtensionSecurity(extension) {
 
 
     const riskyPermissionCount =
-        permissions.filter(permission =>
-            highRiskPermissions.includes(permission)
+        permissions.filter(
+            permission =>
+                highRiskPermissions.includes(permission)
         ).length;
 
 
@@ -125,6 +161,10 @@ function analyzeExtensionSecurity(extension) {
     }
 
 
+    // ----------------------------------
+    // BROAD HOST ACCESS
+    // ----------------------------------
+
     if (hostPermissions.length >= 5) {
 
         findings.push({
@@ -136,6 +176,10 @@ function analyzeExtensionSecurity(extension) {
 
     }
 
+
+    // ----------------------------------
+    // CALCULATE EXTENSION RISK
+    // ----------------------------------
 
     let risk = "LOW";
 
@@ -149,7 +193,8 @@ function analyzeExtensionSecurity(extension) {
 
         risk = "HIGH";
 
-    } else if (
+    }
+    else if (
         findings.some(
             finding =>
                 finding.severity === "MEDIUM"
@@ -160,6 +205,10 @@ function analyzeExtensionSecurity(extension) {
 
     }
 
+
+    // ----------------------------------
+    // NO SUSPICIOUS PERMISSIONS
+    // ----------------------------------
 
     if (findings.length === 0) {
 
@@ -178,6 +227,12 @@ function analyzeExtensionSecurity(extension) {
         findings: findings
     };
 }
+
+
+
+// ==================================
+// SCAN INSTALLED EXTENSIONS
+// ==================================
 
 async function scanInstalledExtensions() {
 
@@ -222,7 +277,6 @@ async function scanInstalledExtensions() {
 
                         findings:
                             analysis.findings
-
                     };
 
                 }
@@ -248,28 +302,68 @@ async function scanInstalledExtensions() {
 
     return results;
 }
+function isValidScanMessage(message) {
+
+    if (!message || typeof message !== "object") {
+        return false;
+    }
+
+    if (message.type !== "SCAN_RESULT") {
+        return false;
+    }
+
+    if (!message.data || typeof message.data !== "object") {
+        return false;
+    }
+
+    return true;
+}
+
+
+// ==================================
+// MESSAGE LISTENER
+// ==================================
+
 chrome.runtime.onMessage.addListener(
     (message, sender, sendResponse) => {
+
 
         console.log(
             "Service Worker received:",
             message
         );
 
-       if (
+        if (!isValidScanMessage(message)) {
+
+            console.warn(
+                "SentinelAI: Invalid message rejected"
+            );
+
+            return;
+        }
+
+        // ==================================
+        // SCAN RESULT
+        // ==================================
+
+        if (
             message.type ===
             "SCAN_RESULT"
         ) {
+
 
             const tabId =
                 sender.tab?.id;
 
 
+            // Ignore invalid tab IDs
             if (
                 tabId === undefined ||
                 tabId < 0
             ) {
+
                 return;
+
             }
 
 
@@ -277,17 +371,32 @@ chrome.runtime.onMessage.addListener(
                 "extensionScan",
                 (result) => {
 
+
                     const extensionScan =
                         result.extensionScan || [];
 
 
+                    // ==================================
+                    // ATTACH EXTENSION SCAN
+                    // ==================================
+
                     message.data.extensionScan =
                         extensionScan;
-                    
-                    const websiteRisk =
-                        message.data.risk?.level ||
-                        "SAFE";
 
+
+                    // ==================================
+                    // WEBSITE RISK
+                    // ==================================
+
+                    const websiteRisk =
+                        sanitizeRiskLevel(
+                            message.data.risk?.level
+                        );
+
+
+                    // ==================================
+                    // CALCULATE OVERALL RISK
+                    // ==================================
 
                     const combinedRisk =
                         calculateCombinedRisk(
@@ -298,7 +407,12 @@ chrome.runtime.onMessage.addListener(
 
                     message.data.overallRisk =
                         combinedRisk;
-                    
+
+
+                    // ==================================
+                    // EXTENSION RISK REASONS
+                    // ==================================
+
                     const extensionRiskReasons =
                         collectExtensionRiskReasons(
                             extensionScan
@@ -308,36 +422,288 @@ chrome.runtime.onMessage.addListener(
                     message.data.extensionRiskReasons =
                         extensionRiskReasons;
 
+
                     console.log(
                         "SentinelAI: Building AI payload in Service Worker"
                     );
+
+
+                    // ==================================
+                    // BUILD AI-SAFE PAYLOAD
+                    // ==================================
 
                     const aiPayload =
                         buildAISecurityPayload(
                             message.data
                         );
 
+
                     message.data.aiPayload =
                         aiPayload;
+
 
                     console.log(
                         "SentinelAI AI-Safe Payload:",
                         aiPayload
                     );
 
-                    if (
-                        aiPayload.overallRisk === "HIGH" ||
-                        aiPayload.overallRisk === "CRITICAL"
-                    ) {
 
-                        requestAIAnalysis(
-                            aiPayload,
-                            tabId
+
+                    // ==================================
+                    // AI ANALYSIS TRIGGER
+                    // ==================================
+
+                    const aiWebsiteRisk =
+                        aiPayload.websiteRisk ||
+                        "LOW";
+
+
+                    const aiExtensionRisk =
+                        aiPayload.extensionRisk ||
+                        "LOW";
+
+
+                    /*
+                     * AI should run when:
+                     *
+                     * Website = HIGH / CRITICAL
+                     * OR
+                     * Extension = HIGH / CRITICAL
+                     *
+                     * Extension risk does NOT automatically
+                     * increase overallRisk.
+                     */
+
+                    const shouldRequestAI =
+                        aiWebsiteRisk === "HIGH" ||
+                        aiWebsiteRisk === "CRITICAL" ||
+                        aiExtensionRisk === "HIGH" ||
+                        aiExtensionRisk === "CRITICAL";
+
+
+
+                    if (shouldRequestAI) {
+
+
+                        // ==================================
+                        // CREATE SECURITY FINGERPRINT
+                        // ==================================
+
+                        const currentFingerprint =
+                            createAIPayloadFingerprint(
+                                aiPayload
+                            );
+
+
+
+                        // ==================================
+                        // 1. PREVENT SIMULTANEOUS REQUESTS
+                        // ==================================
+
+                        if (
+                            aiRequestsInProgress.has(
+                                tabId
+                            )
+                        ) {
+
+
+                            console.log(
+                                "SentinelAI: AI analysis already in progress for tab. Skipping duplicate request:",
+                                tabId
+                            );
+
+
+                        }
+                        else {
+
+
+                            /*
+                             * IMPORTANT:
+                             *
+                             * Lock BEFORE checking storage.
+                             *
+                             * This fixes the race condition where
+                             * two SCAN_RESULT messages arrive together.
+                             */
+
+                            aiRequestsInProgress.add(
+                                tabId
+                            );
+
+
+
+                            // ==================================
+                            // 2. CHECK LAST ANALYZED FINGERPRINT
+                            // ==================================
+
+                            chrome.storage.local.get(
+                                [
+                                    `ai_fingerprint_${tabId}`
+                                ],
+                                (fingerprintResult) => {
+
+
+                                    const lastFingerprint =
+                                        fingerprintResult[
+                                            `ai_fingerprint_${tabId}`
+                                        ];
+
+
+
+                                    // ==================================
+                                    // 3. SAME PAYLOAD
+                                    // ==================================
+
+                                    if (
+                                        lastFingerprint ===
+                                        currentFingerprint
+                                    ) {
+
+
+                                        console.log(
+                                            "SentinelAI: Same security payload already analyzed. Skipping AI request for tab:",
+                                            tabId
+                                        );
+
+
+                                        /*
+                                         * No AI request is being made,
+                                         * so release the lock here.
+                                         */
+
+                                        aiRequestsInProgress.delete(
+                                            tabId
+                                        );
+
+
+                                        return;
+
+                                    }
+
+
+
+                                    // ==================================
+                                    // 4. NEW SECURITY STATE
+                                    // ==================================
+
+                                    console.log(
+                                        "SentinelAI: New significant security state detected. Requesting AI analysis."
+                                    );
+
+                                    // ==================================
+                                    // 4. CHECK PRIVACY MODE
+                                    // ==================================
+
+                                    chrome.storage.local.get(
+                                        "privacyMode",
+                                        (privacyResult) => {
+
+                                            const privacyMode =
+                                                privacyResult.privacyMode === true;
+
+
+                                            // ==================================
+                                            // PRIVACY MODE ENABLED
+                                            // ==================================
+
+                                            if (privacyMode) {
+
+                                                console.log(
+                                                    "SentinelAI: Privacy Mode enabled. Skipping AI analysis."
+                                                );
+
+                                                /*
+                                                * No AI request is made.
+                                                * Release the lock because
+                                                * processing is complete.
+                                                */
+
+                                                aiRequestsInProgress.delete(
+                                                    tabId
+                                                );
+
+                                                return;
+                                            }
+
+
+                                            // ==================================
+                                            // 5. REQUEST AI
+                                            // ==================================
+
+                                            requestAIAnalysis(
+                                                aiPayload,
+                                                tabId
+                                            )
+
+                                            .then(
+                                                () => {
+
+                                                    /*
+                                                    * Save fingerprint only after
+                                                    * AI analysis completes.
+                                                    */
+
+                                                    return chrome.storage.local.set({
+
+                                                        [`ai_fingerprint_${tabId}`]:
+                                                            currentFingerprint
+
+                                                    });
+
+                                                }
+                                            )
+
+                                            .finally(
+                                                () => {
+
+                                                    /*
+                                                    * Release AI request lock.
+                                                    */
+
+                                                    aiRequestsInProgress.delete(
+                                                        tabId
+                                                    );
+
+                                                    console.log(
+                                                        "SentinelAI: AI request lock released for tab:",
+                                                        tabId
+                                                    );
+
+                                                }
+                                            );
+
+                                        }
+                                    );
+
+
+
+                           
+
+                                }
+                            );
+
+                        }
+
+
+                    }
+                    else {
+
+
+                        // ==================================
+                        // LOW RISK → NO AI
+                        // ==================================
+
+                        console.log(
+                            "SentinelAI: Risk is low. Skipping AI analysis."
                         );
 
                     }
-                    
 
+
+
+                    // ==================================
+                    // STORE SCAN RESULT
+                    // ==================================
 
                     chrome.storage.local.set({
 
@@ -363,13 +729,36 @@ chrome.runtime.onMessage.addListener(
     }
 );
 
+function sanitizeRiskLevel(level) {
+
+    const allowedLevels = [
+        "SAFE",
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+    ];
+
+    if (allowedLevels.includes(level)) {
+        return level;
+    }
+
+    return "SAFE";
+}
+
+// ==================================
+// CALCULATE OVERALL RISK
+// ==================================
+
 function calculateCombinedRisk(
     websiteRisk,
     extensionScan
 ) {
 
+
     const extensionRisks =
         extensionScan || [];
+
 
     const hasHighExtension =
         extensionRisks.some(
@@ -377,53 +766,88 @@ function calculateCombinedRisk(
                 extension.risk === "HIGH"
         );
 
+
     const hasMediumExtension =
         extensionRisks.some(
             extension =>
                 extension.risk === "MEDIUM"
         );
 
+
     let overallRisk =
         websiteRisk || "SAFE";
 
-    // Do not automatically raise the website risk
-    // only because a high-risk extension is installed.
-    //
-    // Extension risk is already shown separately.
-    // Combined risk should increase only when
-    // there is a meaningful website + extension
-    // combination that we explicitly define.
+
+    /*
+     * IMPORTANT:
+     *
+     * Extension risk should NOT automatically
+     * increase website overall risk.
+     *
+     * Example:
+     *
+     * Website = LOW
+     * Extension = HIGH
+     *
+     * Result:
+     *
+     * overallRisk = LOW
+     * websiteRisk = LOW
+     * extensionRisk = HIGH
+     *
+     * But AI is still triggered because
+     * extensionRisk is HIGH.
+     */
+
 
     if (
         websiteRisk === "CRITICAL"
     ) {
+
         overallRisk = "CRITICAL";
+
     }
     else if (
         websiteRisk === "HIGH"
     ) {
+
         overallRisk = "HIGH";
+
     }
     else if (
         websiteRisk === "MEDIUM"
     ) {
+
         overallRisk = "MEDIUM";
+
     }
     else if (
         websiteRisk === "LOW"
     ) {
+
         overallRisk = "LOW";
+
     }
     else {
+
         overallRisk = "SAFE";
+
     }
+
 
     return overallRisk;
 }
 
+
+
+// ==================================
+// COLLECT EXTENSION RISK REASONS
+// ==================================
+
 function collectExtensionRiskReasons(
     extensionScan
 ) {
+
 
     const reasons = [];
 
@@ -431,14 +855,17 @@ function collectExtensionRiskReasons(
     (extensionScan || []).forEach(
         extension => {
 
+
             (extension.findings || [])
                 .forEach(
                     finding => {
+
 
                         if (
                             finding.severity === "HIGH" ||
                             finding.severity === "MEDIUM"
                         ) {
+
 
                             reasons.push(
                                 `${extension.name}: ${finding.reason}`
@@ -456,37 +883,105 @@ function collectExtensionRiskReasons(
     return [
         ...new Set(reasons)
     ];
-
 }
+
+
+
+// ==================================
+// CREATE AI PAYLOAD FINGERPRINT
+// ==================================
+
+function createAIPayloadFingerprint(
+    aiPayload
+) {
+
+
+    /*
+     * Only security-relevant fields are included.
+     *
+     * If these fields do not change,
+     * the same payload does not need another
+     * Gemini request.
+     */
+
+    return JSON.stringify({
+
+        overallRisk:
+            aiPayload.overallRisk,
+
+        websiteRisk:
+            aiPayload.websiteRisk,
+
+        extensionRisk:
+            aiPayload.extensionRisk,
+
+        findings:
+            aiPayload.findings,
+
+        correlations:
+            aiPayload.correlations
+
+    });
+}
+
+
+
+// ==================================
+// REQUEST AI ANALYSIS
+// ==================================
+
 async function requestAIAnalysis(
     aiPayload,
     tabId
 ) {
 
+        const AI_BACKEND_URL =
+            "http://localhost:3000/api/analyze";
+
+        if (
+            !AI_BACKEND_URL.startsWith("https://") &&
+            !AI_BACKEND_URL.startsWith("http://localhost")
+        ) {
+            throw new Error(
+                "Insecure AI backend configuration"
+            );
+        }
+
+
     try {
+
 
         console.log(
             "SentinelAI: Sending sanitized payload to AI backend"
         );
 
+
         const response =
             await fetch(
-                "http://localhost:3000/api/analyze",
+                AI_BACKEND_URL,
                 {
-                    method: "POST",
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
+                    method:
+                        "POST",
+
+                    headers:
+                        {
+                            "Content-Type":
+                                "application/json"
+                        },
 
                     body:
                         JSON.stringify(
                             aiPayload
                         )
+
                 }
             );
 
+
+        // ==================================
+        // HTTP ERROR
+        // ==================================
 
         if (!response.ok) {
 
@@ -497,6 +992,10 @@ async function requestAIAnalysis(
         }
 
 
+        // ==================================
+        // READ AI RESULT
+        // ==================================
+
         const result =
             await response.json();
 
@@ -506,6 +1005,10 @@ async function requestAIAnalysis(
             result
         );
 
+
+        // ==================================
+        // STORE AI RESULT
+        // ==================================
 
         await chrome.storage.local.set({
 
@@ -521,19 +1024,26 @@ async function requestAIAnalysis(
         );
 
 
-    } catch (error) {
+    }
+    catch (error) {
+
 
         console.error(
             "SentinelAI: AI analysis failed:",
-            error
+            
         );
 
+
+        // ==================================
+        // STORE FALLBACK RESULT
+        // ==================================
 
         await chrome.storage.local.set({
 
             [`ai_analysis_${tabId}`]: {
 
-                success: false,
+                success:
+                    false,
 
                 error:
                     "AI analysis temporarily unavailable"
@@ -542,9 +1052,25 @@ async function requestAIAnalysis(
 
         });
 
+
+        /*
+         * Important:
+         *
+         * Fingerprint is NOT saved here.
+         *
+         * Therefore, if the AI call fails,
+         * the same security state can be
+         * retried later.
+         */
+
     }
 
 }
 
+
+
+// ==================================
+// INITIAL EXTENSION SCAN
+// ==================================
 
 scanInstalledExtensions();
