@@ -4,8 +4,12 @@ function analyzeDOM() {
 
     const findings = [];
 
+    // --------------------------------------------------
     // 1. Forms
-    const forms = document.querySelectorAll("form");
+    // --------------------------------------------------
+
+    const forms =
+        document.querySelectorAll("form");
 
     if (forms.length > 0) {
 
@@ -20,26 +24,18 @@ function analyzeDOM() {
     }
 
 
-    // 2. Password fields
-    const passwordFields =
+    // --------------------------------------------------
+    // 2. Password + Sensitive Inputs
+    // --------------------------------------------------
+
+    const inputs =
         document.querySelectorAll(
-            'input[type="password"]'
+            "input, textarea"
         );
 
-    if (passwordFields.length > 0) {
+    let passwordCount = 0;
+    let sensitiveCount = 0;
 
-        findings.push({
-            category: "DOM",
-            type: "PASSWORD_FIELD",
-            severity: "MEDIUM",
-            reason:
-                `${passwordFields.length} password field(s) detected`
-        });
-
-    }
-
-
-    // 3. Sensitive inputs
     const sensitivePatterns = [
         "email",
         "phone",
@@ -56,14 +52,14 @@ function analyzeDOM() {
         "otp"
     ];
 
-    const inputs =
-        document.querySelectorAll(
-            "input, textarea"
-        );
-
-    let sensitiveCount = 0;
-
     inputs.forEach((input) => {
+
+        const type =
+            (input.type || "").toLowerCase();
+
+        if (type === "password") {
+            passwordCount++;
+        }
 
         const value = (
             (input.name || "") +
@@ -74,8 +70,9 @@ function analyzeDOM() {
         ).toLowerCase();
 
         const matched =
-            sensitivePatterns.some(pattern =>
-                value.includes(pattern)
+            sensitivePatterns.some(
+                pattern =>
+                    value.includes(pattern)
             );
 
         if (matched) {
@@ -83,6 +80,20 @@ function analyzeDOM() {
         }
 
     });
+
+
+    if (passwordCount > 0) {
+
+        findings.push({
+            category: "DOM",
+            type: "PASSWORD_FIELD",
+            severity: "MEDIUM",
+            reason:
+                `${passwordCount} password field(s) detected`
+        });
+
+    }
+
 
     if (sensitiveCount > 0) {
 
@@ -97,7 +108,10 @@ function analyzeDOM() {
     }
 
 
-    // 4. Iframes
+    // --------------------------------------------------
+    // 3. Iframes
+    // --------------------------------------------------
+
     const iframes =
         document.querySelectorAll("iframe");
 
@@ -114,13 +128,25 @@ function analyzeDOM() {
     }
 
 
-    // 5. Hidden elements
-    const allElements =
-        document.querySelectorAll("*");
+    // --------------------------------------------------
+    // 4. Hidden Elements
+    // --------------------------------------------------
 
     let hiddenCount = 0;
 
-    allElements.forEach((element) => {
+    /*
+     * Only inspect elements that can reasonably
+     * participate in visual/content hiding.
+     *
+     * This avoids querySelectorAll("*") over the
+     * complete DOM tree.
+     */
+    const potentiallyHiddenElements =
+        document.querySelectorAll(
+            "div, section, article, form, input, textarea, button, a, p, span, img, iframe"
+        );
+
+    potentiallyHiddenElements.forEach((element) => {
 
         const style =
             window.getComputedStyle(element);
@@ -133,6 +159,7 @@ function analyzeDOM() {
         }
 
     });
+
 
     if (hiddenCount > 0) {
 
@@ -147,10 +174,14 @@ function analyzeDOM() {
     }
 
 
-    // 6. External resources
-    const resources = document.querySelectorAll(
-        'script[src], img[src], link[href], iframe[src]'
-    );
+    // --------------------------------------------------
+    // 5. External Resources
+    // --------------------------------------------------
+
+    const resources =
+        document.querySelectorAll(
+            'script[src], img[src], link[href], iframe[src]'
+        );
 
     let externalCount = 0;
 
@@ -167,7 +198,10 @@ function analyzeDOM() {
         try {
 
             const resourceURL =
-                new URL(url, window.location.href);
+                new URL(
+                    url,
+                    window.location.href
+                );
 
             if (
                 resourceURL.origin !==
@@ -184,6 +218,7 @@ function analyzeDOM() {
 
     });
 
+
     if (externalCount > 0) {
 
         findings.push({
@@ -197,7 +232,10 @@ function analyzeDOM() {
     }
 
 
-    // 7. Suspicious form structure
+    // --------------------------------------------------
+    // 6. Suspicious Form Structure
+    // --------------------------------------------------
+
     const suspiciousForms = [];
 
     forms.forEach((form) => {
@@ -223,6 +261,7 @@ function analyzeDOM() {
 
     });
 
+
     if (suspiciousForms.length > 0) {
 
         findings.push({
@@ -236,9 +275,12 @@ function analyzeDOM() {
     }
 
 
-    // 8. Dangerous DOM sinks
+    // --------------------------------------------------
+    // 7. Dangerous DOM Sinks
+    // --------------------------------------------------
+
     const pageScripts =
-        Array.from(document.scripts);
+        document.scripts;
 
     let dangerousSinkCount = 0;
 
@@ -250,20 +292,35 @@ function analyzeDOM() {
         "eval("
     ];
 
-    pageScripts.forEach((script) => {
+    for (
+        let i = 0;
+        i < pageScripts.length;
+        i++
+    ) {
 
         const code =
-            script.textContent || "";
+            pageScripts[i].textContent || "";
 
-        dangerousSinks.forEach((sink) => {
+        for (
+            let j = 0;
+            j < dangerousSinks.length;
+            j++
+        ) {
 
-            if (code.includes(sink)) {
+            if (
+                code.includes(
+                    dangerousSinks[j]
+                )
+            ) {
+
                 dangerousSinkCount++;
+
             }
 
-        });
+        }
 
-    });
+    }
+
 
     if (dangerousSinkCount > 0) {
 
@@ -278,7 +335,10 @@ function analyzeDOM() {
     }
 
 
-    // No findings
+    // --------------------------------------------------
+    // 8. No Findings
+    // --------------------------------------------------
+
     if (findings.length === 0) {
 
         findings.push({

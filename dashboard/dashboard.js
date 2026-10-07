@@ -28,7 +28,8 @@ if (!tabId) {
         [
             `scan_${tabId}`,
             "extensionScan",
-            `ai_analysis_${tabId}`
+            `ai_analysis_${tabId}`,
+            "privacyMode"
         ],
         (result) => {
 
@@ -51,6 +52,25 @@ if (!tabId) {
 
                 return;
 
+            }
+
+            const privacyMode =
+                result.privacyMode === true;
+
+            const privacyStatusElement =
+                document.getElementById("privacyStatus");
+
+            if (privacyStatusElement) {
+
+                privacyStatusElement.textContent =
+                    privacyMode
+                        ? "ON"
+                        : "OFF";
+
+                privacyStatusElement.className =
+                    privacyMode
+                        ? "enabled"
+                        : "disabled";
             }
 
 

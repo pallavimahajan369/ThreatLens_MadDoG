@@ -150,19 +150,44 @@ function scanPage(reason = "page-load") {
         "SentinelAI: SCAN_RESULT message sent to Service Worker"
     );
 
-    // ===============================
-    // SEND TO SERVICE WORKER
-    // ===============================
-
-    chrome.runtime.sendMessage({
-
-        type: "SCAN_RESULT",
-
-        data: result
-
-    });
 
 }
 
 // START INITIAL SCAN
 scanPage("page-load");
+
+// ===============================
+// MUTATION OBSERVER
+// ===============================
+
+let mutationTimer = null;
+
+const domObserver = new MutationObserver(() => {
+
+    clearTimeout(mutationTimer);
+
+    mutationTimer = setTimeout(() => {
+
+        console.log(
+            "SentinelAI: DOM mutation detected. Re-scanning..."
+        );
+
+        scanPage("dom-mutation");
+
+    }, 500);
+});
+
+if (document.documentElement) {
+
+    domObserver.observe(
+        document.documentElement,
+        {
+            childList: true,
+            subtree: true
+        }
+    );
+
+    console.log(
+        "SentinelAI: MutationObserver started"
+    );
+}
