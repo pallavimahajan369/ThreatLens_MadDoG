@@ -271,9 +271,12 @@ if (!tabId) {
             ).textContent =
                 extensionFindingCount;
             
+            
             // EXTENSION FINDINGS DETAILS
             const extensionFindingsContainer =
-                document.getElementById("extensionFindingsContainer");
+                document.getElementById(
+                    "extensionFindingsContainer"
+                );
 
             if (extensionFindingsContainer) {
 
@@ -286,7 +289,14 @@ if (!tabId) {
 
                 } else {
 
-                    extensionScan.forEach(extension => {
+                    /*
+                    * Build everything in memory first.
+                    * Append to DOM only once.
+                    */
+                    const fragment =
+                        document.createDocumentFragment();
+
+                    extensionScan.forEach((extension) => {
 
                         const extensionCard =
                             document.createElement("div");
@@ -300,7 +310,8 @@ if (!tabId) {
                             document.createElement("h4");
 
                         extensionName.textContent =
-                            extension.name || "Unknown Extension";
+                            extension.name ||
+                            "Unknown Extension";
 
                         extensionCard.appendChild(
                             extensionName
@@ -349,7 +360,7 @@ if (!tabId) {
 
                         } else {
 
-                            findings.forEach(finding => {
+                            findings.forEach((finding) => {
 
                                 const findingItem =
                                     document.createElement("div");
@@ -357,11 +368,14 @@ if (!tabId) {
                                 findingItem.className =
                                     "extension-finding-item";
 
+
                                 const severity =
                                     document.createElement("strong");
 
                                 severity.textContent =
-                                    finding.severity || "LOW";
+                                    finding.severity ||
+                                    "LOW";
+
 
                                 const reason =
                                     document.createElement("span");
@@ -369,6 +383,7 @@ if (!tabId) {
                                 reason.textContent =
                                     finding.reason ||
                                     "No reason provided";
+
 
                                 findingItem.appendChild(
                                     severity
@@ -382,19 +397,36 @@ if (!tabId) {
                                     reason
                                 );
 
+
                                 extensionCard.appendChild(
                                     findingItem
                                 );
+
                             });
+
                         }
 
 
-                        extensionFindingsContainer.appendChild(
+                        /*
+                        * Add completed card to fragment,
+                        * not directly to the live DOM.
+                        */
+                        fragment.appendChild(
                             extensionCard
                         );
+
                     });
+
+
+                    /*
+                    * Single DOM insertion.
+                    */
+                    extensionFindingsContainer.appendChild(
+                        fragment
+                    );
                 }
             }
+
 
             // ==================================
             // OVERALL WEBSITE RISK

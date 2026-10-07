@@ -1,3 +1,4 @@
+
 document.addEventListener("DOMContentLoaded", () => {
 
     const currentUrlElement =
@@ -22,6 +23,9 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("privacyStatus");
 
 
+    /*
+     * Get active tab
+     */
     chrome.tabs.query(
         {
             active: true,
@@ -40,10 +44,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const currentUrl =
                 currentTab.url || "Unknown";
 
+
             /*
              * Display current website
              */
             if (currentUrlElement) {
+
                 currentUrlElement.textContent =
                     currentUrl;
             }
@@ -78,9 +84,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     /*
                      * Overall risk
                      *
-                     * Use website risk here because
-                     * extension risk should not
-                     * automatically increase website risk.
+                     * Extension risk should not
+                     * automatically increase
+                     * website/overall risk.
                      */
                     const overallRisk =
                         scan?.overallRisk ||
@@ -88,6 +94,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
                     if (riskLevelElement) {
+
                         riskLevelElement.textContent =
                             `${overallRisk} RISK`;
                     }
@@ -102,22 +109,26 @@ document.addEventListener("DOMContentLoaded", () => {
                             overallRisk === "CRITICAL" ||
                             overallRisk === "HIGH"
                         ) {
+
                             riskIconElement.textContent =
                                 "🔴";
 
                         } else if (
                             overallRisk === "MEDIUM"
                         ) {
+
                             riskIconElement.textContent =
                                 "🟠";
 
                         } else if (
                             overallRisk === "LOW"
                         ) {
+
                             riskIconElement.textContent =
                                 "🟡";
 
                         } else {
+
                             riskIconElement.textContent =
                                 "🟢";
                         }
@@ -128,16 +139,24 @@ document.addEventListener("DOMContentLoaded", () => {
                      * Website findings
                      */
                     const websiteFindings = [
+
                         ...(scan?.urlFindings || []),
+
                         ...(scan?.domFindings || []),
+
                         ...(scan?.formFindings || []),
+
                         ...(scan?.scriptIframeFindings || []),
+
                         ...(scan?.sensitiveDataFindings || []),
+
                         ...(scan?.promptInjectionFindings || [])
+
                     ];
 
 
                     if (websiteFindingsElement) {
+
                         websiteFindingsElement.textContent =
                             websiteFindings.length;
                     }
@@ -161,6 +180,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
                     if (extensionFindingsElement) {
+
                         extensionFindingsElement.textContent =
                             totalExtensionFindings;
                     }
@@ -181,6 +201,7 @@ document.addEventListener("DOMContentLoaded", () => {
                      */
                     const privacyMode =
                         result.privacyMode === true;
+
 
                     if (privacyStatusElement) {
 
@@ -205,88 +226,54 @@ document.addEventListener("DOMContentLoaded", () => {
     /*
      * View Details
      */
-    document.getElementById(
-        "detailsBtn"
-    ).addEventListener(
-        "click",
-        () => {
+    const detailsButton =
+        document.getElementById("detailsBtn");
 
-            chrome.tabs.query(
-                {
-                    active: true,
-                    currentWindow: true
-                },
-                (tabs) => {
 
-                    if (!tabs || !tabs.length) {
-                        return;
+    if (detailsButton) {
+
+        detailsButton.addEventListener(
+            "click",
+            () => {
+
+                chrome.tabs.query(
+                    {
+                        active: true,
+                        currentWindow: true
+                    },
+                    (tabs) => {
+
+                        if (!tabs || !tabs.length) {
+                            return;
+                        }
+
+                        const currentTab =
+                            tabs[0];
+
+
+                        const dashboardUrl =
+                            chrome.runtime.getURL(
+                                "dashboard/dashboard.html"
+                            ) +
+                            "?tabId=" +
+                            currentTab.id +
+                            "&url=" +
+                            encodeURIComponent(
+                                currentTab.url || ""
+                            );
+
+
+                        chrome.tabs.create({
+                            url: dashboardUrl
+                        });
+
                     }
+                );
 
-                    const currentTab = tabs[0];
+            }
+        );
 
-                    const dashboardUrl =
-                        chrome.runtime.getURL(
-                            "dashboard/dashboard.html"
-                        ) +
-                        "?tabId=" +
-                        currentTab.id +
-                        "&url=" +
-                        encodeURIComponent(
-                            currentTab.url || ""
-                        );
-
-                    chrome.tabs.create({
-                        url: dashboardUrl
-                    });
-
-                }
-            );
-
-        }
-    );
-
-
-    /*
-     * Dashboard
-     */
-    document.getElementById(
-        "dashboardBtn"
-    ).addEventListener(
-        "click",
-        () => {
-
-            chrome.tabs.query(
-                {
-                    active: true,
-                    currentWindow: true
-                },
-                (tabs) => {
-
-                    if (!tabs || !tabs.length) {
-                        return;
-                    }
-
-                    const currentTab = tabs[0];
-
-                    const dashboardUrl =
-                        chrome.runtime.getURL(
-                            "dashboard/dashboard.html"
-                        ) +
-                        "?tabId=" +
-                        currentTab.id +
-                        "&url=" +
-                        encodeURIComponent(
-                            currentTab.url || ""
-                        );
-
-                    chrome.tabs.create({
-                        url: dashboardUrl
-                    });
-
-                }
-            );
-
-        }
-    );
+    }
 
 });
+

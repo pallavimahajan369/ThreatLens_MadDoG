@@ -4,7 +4,10 @@ console.log("SentinelAI service worker started");
 
 // Track tabs that currently have an AI request in progress
 const aiRequestsInProgress = new Set();
+const AI_RETRY_COOLDOWN = 5 * 60 * 1000;
 
+const aiRetryCooldown =
+    new Map();
 
 // ==================================
 // EXTENSION SECURITY ANALYSIS
@@ -586,6 +589,25 @@ chrome.runtime.onMessage.addListener(
                                     // 4. NEW SECURITY STATE
                                     // ==================================
 
+                                    const now = Date.now();
+
+                                    const lastFailedTime =
+                                        aiRetryCooldown.get(tabId);
+
+                                    if (
+                                        lastFailedTime &&
+                                        (now - lastFailedTime) <
+                                            AI_RETRY_COOLDOWN
+                                    ) {
+
+                                        console.log(
+                                            "SentinelAI: AI retry cooldown active. Skipping AI request for tab:",
+                                            tabId
+                                        );
+
+                                        return;
+                                    }
+
                                     console.log(
                                         "SentinelAI: New significant security state detected. Requesting AI analysis."
                                     );
@@ -1031,6 +1053,16 @@ async function requestAIAnalysis(
         console.error(
             "SentinelAI: AI analysis failed:",
             
+        );
+
+        aiRetryCooldown.set(
+            tabId,
+            Date.now()
+        );
+
+        console.log(
+            "SentinelAI: AI retry cooldown started for tab:",
+            tabId
         );
 
 

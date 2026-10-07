@@ -161,21 +161,82 @@ scanPage("page-load");
 // ===============================
 
 let mutationTimer = null;
+let scanScheduled = false;
 
-const domObserver = new MutationObserver(() => {
+function isSecurityRelevantMutation(mutations) {
 
-    clearTimeout(mutationTimer);
+    return mutations.some((mutation) => {
 
-    mutationTimer = setTimeout(() => {
+        if (
+            mutation.type !== "childList" ||
+            mutation.addedNodes.length === 0
+        ) {
+            return false;
+        }
 
-        console.log(
-            "SentinelAI: DOM mutation detected. Re-scanning..."
-        );
+        for (const node of mutation.addedNodes) {
 
-        scanPage("dom-mutation");
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                continue;
+            }
 
-    }, 500);
-});
+            const element =
+                /** @type {Element} */ (node);
+
+            // Security-relevant elements
+            if (
+                element.matches(
+                    "form, input, textarea, iframe, script, a, button"
+                )
+            ) {
+                return true;
+            }
+
+            // Check descendants
+            if (
+                element.querySelector(
+                    "form, input, textarea, iframe, script, a, button"
+                )
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    });
+}
+
+const domObserver =
+    new MutationObserver((mutations) => {
+
+        if (
+            !isSecurityRelevantMutation(
+                mutations
+            )
+        ) {
+            return;
+        }
+
+        clearTimeout(mutationTimer);
+
+        mutationTimer = setTimeout(() => {
+
+            if (scanScheduled) {
+                return;
+            }
+
+            scanScheduled = true;
+
+            console.log(
+                "SentinelAI: Relevant DOM mutation detected. Re-scanning..."
+            );
+
+            scanPage("dom-mutation");
+
+            scanScheduled = false;
+
+        }, 500);
+    });
 
 if (document.documentElement) {
 
