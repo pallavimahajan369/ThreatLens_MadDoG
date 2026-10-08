@@ -3,7 +3,12 @@
   "name": "SentinelAI",
   "version": "1.0.0",
   "description": "Security-focused browser extension for detecting suspicious web activity.",
-
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": [
     "storage",
     "tabs",
@@ -37,7 +42,6 @@
         "content/phishing-security.js",
         "content/prompt-injection-security.js",
         "content/risk-engine.js",
-        "content/ai-sanitizer.js",
         "content/content.js"
       ],
       "run_at": "document_idle"
