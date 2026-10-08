@@ -1,6 +1,10 @@
 console.log("SentinelAI AI Sanitizer loaded");
 
 
+// ==================================
+// SANITIZE FINDINGS
+// ==================================
+
 function sanitizeFindings(findings) {
 
     return (findings || []).map((finding) => {
@@ -25,9 +29,15 @@ function sanitizeFindings(findings) {
                     "No reason provided"
                 )
         };
+
     });
+
 }
 
+
+// ==================================
+// SANITIZE REASONS
+// ==================================
 
 function sanitizeReason(reason) {
 
@@ -35,73 +45,76 @@ function sanitizeReason(reason) {
         return "No reason provided";
     }
 
-    let sanitized =
-        String(reason);
+    let sanitized = String(reason);
 
 
     // ==================================
     // Remove JWT-like values
     // ==================================
 
-    sanitized =
-        sanitized.replace(
-            /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
-            "[REDACTED]"
-        );
+    sanitized = sanitized.replace(
+        /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
+        "[REDACTED]"
+    );
 
 
     // ==================================
-    // Remove AWS access-key-like values
+    // Remove AWS Access Key-like values
     // ==================================
 
-    sanitized =
-        sanitized.replace(
-            /\bAKIA[0-9A-Z]{16}\b/g,
-            "[REDACTED]"
-        );
+    sanitized = sanitized.replace(
+        /\bAKIA[0-9A-Z]{16}\b/g,
+        "[REDACTED]"
+    );
 
 
     // ==================================
     // Remove token / secret assignments
     // ==================================
 
-    sanitized =
-        sanitized.replace(
-            /\b(?:token|secret|api[_-]?key|access[_-]?token)\s*[:=]\s*["']?[A-Za-z0-9_\-./+=]{8,}["']?/gi,
-            "[REDACTED]"
-        );
+    sanitized = sanitized.replace(
+        /\b(?:token|secret|api[_-]?key|access[_-]?token)\s*[:=]\s*["']?[A-Za-z0-9_.\/+=-]{8,}["']?/gi,
+        "[REDACTED]"
+    );
 
 
     // ==================================
     // Remove password assignments
     // ==================================
 
-    sanitized =
-        sanitized.replace(
-            /\b(?:password|passwd|pwd)\s*[:=]\s*["']?[^\s"']{6,}["']?/gi,
-            "[REDACTED]"
-        );
+    sanitized = sanitized.replace(
+        /\b(?:password|passwd|pwd)\s*[:=]\s*["']?[^\s"']{6,}["']?/gi,
+        "[REDACTED]"
+    );
 
 
     return sanitized;
 }
 
 
+// ==================================
+// SANITIZE CORRELATIONS
+// ==================================
+
 function sanitizeCorrelations(correlations) {
 
     return (correlations || [])
-        .map(
-            correlation =>
-                sanitizeReason(
-                    correlation
-                )
+
+        .map((correlation) =>
+            sanitizeReason(correlation)
         )
+
         .filter(
-            correlation =>
+            (correlation) =>
                 correlation.length > 0
         );
+
 }
 
+
+// ==================================
+// BUILD AI SECURITY PAYLOAD
+// ==================================
 
 function buildAISecurityPayload(scan) {
 
@@ -120,6 +133,7 @@ function buildAISecurityPayload(scan) {
             correlations: []
 
         };
+
     }
 
 
@@ -145,9 +159,7 @@ function buildAISecurityPayload(scan) {
 
 
     const sanitizedFindings =
-        sanitizeFindings(
-            findings
-        );
+        sanitizeFindings(findings);
 
 
     const correlations =
@@ -155,9 +167,7 @@ function buildAISecurityPayload(scan) {
 
 
     const sanitizedCorrelations =
-        sanitizeCorrelations(
-            correlations
-        );
+        sanitizeCorrelations(correlations);
 
 
     // ==================================
@@ -176,16 +186,21 @@ function buildAISecurityPayload(scan) {
             "SAFE",
 
         extensionRisk:
+
             scan.extensionScan?.some(
-                extension =>
+                (extension) =>
                     extension.risk === "HIGH"
             )
+
                 ? "HIGH"
+
                 : scan.extensionScan?.some(
-                    extension =>
+                    (extension) =>
                         extension.risk === "MEDIUM"
                 )
+
                     ? "MEDIUM"
+
                     : "LOW",
 
         findings:
@@ -195,4 +210,6 @@ function buildAISecurityPayload(scan) {
             sanitizedCorrelations
 
     };
+
 }
+
