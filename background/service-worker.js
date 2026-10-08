@@ -239,8 +239,10 @@ function analyzeExtensionSecurity(extension) {
 
 async function scanInstalledExtensions() {
 
-    const extensions =
-        await chrome.management.getAll();
+    try {
+
+        const extensions =
+            await chrome.management.getAll();
 
 
     const results =
@@ -303,7 +305,19 @@ async function scanInstalledExtensions() {
     );
 
 
-    return results;
+            return results;
+
+    }
+    catch (error) {
+
+        console.error(
+            "SentinelAI: Extension security scan failed:",
+            error
+        );
+
+        return [];
+
+    }
 }
 function isValidScanMessage(message) {
 
@@ -374,6 +388,15 @@ chrome.runtime.onMessage.addListener(
                 "extensionScan",
                 (result) => {
 
+                    if (chrome.runtime.lastError) {
+
+                        console.error(
+                            "SentinelAI: Failed to read extension scan:",
+                            chrome.runtime.lastError.message
+                        );
+
+                        return;
+                    }
 
                     const extensionScan =
                         result.extensionScan || [];
@@ -605,6 +628,10 @@ chrome.runtime.onMessage.addListener(
                                             tabId
                                         );
 
+                                        aiRequestsInProgress.delete(
+                                            tabId
+                                        );
+
                                         return;
                                     }
 
@@ -735,13 +762,23 @@ chrome.runtime.onMessage.addListener(
                         [`scan_${tabId}`]:
                             message.data
 
+                    })
+                    .then(() => {
+
+                        console.log(
+                            "Scan result stored for tab:",
+                            tabId
+                        );
+
+                    })
+                    .catch((error) => {
+
+                        console.error(
+                            "SentinelAI: Failed to store scan result:",
+                            error
+                        );
+
                     });
-
-
-                    console.log(
-                        "Scan result stored for tab:",
-                        tabId
-                    );
 
                 }
             );
@@ -978,11 +1015,16 @@ async function requestAIAnalysis(
         );
 
 
+        const controller = new AbortController();
+
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, 10000);
+
         const response =
             await fetch(
                 AI_BACKEND_URL,
                 {
-
                     method:
                         "POST",
 
@@ -995,10 +1037,14 @@ async function requestAIAnalysis(
                     body:
                         JSON.stringify(
                             aiPayload
-                        )
+                        ),
 
+                    signal:
+                        controller.signal
                 }
             );
+
+        clearTimeout(timeout);
 
 
         // ==================================
@@ -1021,10 +1067,17 @@ async function requestAIAnalysis(
         const result =
             await response.json();
 
+        if (
+            !result ||
+            typeof result !== "object"
+        ) {
+            throw new Error(
+                "Invalid AI backend response"
+            );
+        }
 
         console.log(
-            "SentinelAI: AI analysis received:",
-            result
+            "SentinelAI: AI analysis received"
         );
 
 
@@ -1032,12 +1085,24 @@ async function requestAIAnalysis(
         // STORE AI RESULT
         // ==================================
 
-        await chrome.storage.local.set({
+       try {
 
-            [`ai_analysis_${tabId}`]:
-                result
+            await chrome.storage.local.set({
 
-        });
+                [`ai_analysis_${tabId}`]:
+                    result
+
+            });
+
+        }
+        catch (storageError) {
+
+            console.error(
+                "SentinelAI: Failed to store AI analysis:",
+                storageError
+            );
+
+        }
 
 
         console.log(
@@ -1052,17 +1117,12 @@ async function requestAIAnalysis(
 
         console.error(
             "SentinelAI: AI analysis failed:",
-            
+            error
         );
 
         aiRetryCooldown.set(
             tabId,
             Date.now()
-        );
-
-        console.log(
-            "SentinelAI: AI retry cooldown started for tab:",
-            tabId
         );
 
 
