@@ -16,6 +16,63 @@ const currentWebsite =
     params.get("url");
 
 
+const privacyModeToggle =
+    document.getElementById("privacyModeToggle");
+
+function updatePrivacyStatus(enabled) {
+    const statusElements = [
+        document.getElementById("privacyStatusOverview"),
+        document.getElementById("privacyStatusSettings")
+    ];
+
+    statusElements.forEach((element) => {
+        if (element) {
+            element.textContent = enabled ? "ON" : "OFF";
+            element.className = enabled ? "enabled" : "disabled";
+        }
+    });
+}
+
+// Read the saved setting when the dashboard opens
+chrome.storage.local.get("privacyMode", (result) => {
+    const enabled = result.privacyMode === true;
+
+    if (privacyModeToggle) {
+        privacyModeToggle.checked = enabled;
+    }
+
+    updatePrivacyStatus(enabled);
+});
+
+// Save the setting when the checkbox changes
+if (privacyModeToggle) {
+    privacyModeToggle.addEventListener("change", () => {
+        const enabled = privacyModeToggle.checked;
+
+        chrome.storage.local.set(
+            { privacyMode: enabled },
+            () => {
+                if (chrome.runtime.lastError) {
+                    console.error(
+                        "Could not save Privacy Mode:",
+                        chrome.runtime.lastError.message
+                    );
+                    return;
+                }
+
+                updatePrivacyStatus(enabled);
+
+                console.log(
+                    "TreatLens Privacy Mode saved:",
+                    enabled
+                );
+            }
+        );
+    });
+}
+
+
+
 if (!tabId) {
 
     console.log(
@@ -24,6 +81,7 @@ if (!tabId) {
 
 } else {
 
+    
     chrome.storage.local.get(
         [
             `scan_${tabId}`,
@@ -42,6 +100,22 @@ if (!tabId) {
             const aiAnalysis =
                 result[`ai_analysis_${tabId}`] || null; 
 
+            const privacyMode =
+                result.privacyMode === true;
+
+            
+            const privacyStatusElements = [
+                document.getElementById("privacyStatusOverview"),
+                document.getElementById("privacyStatusSettings")
+            ];
+
+            privacyStatusElements.forEach((element) => {
+                if (element) {
+                    element.textContent = privacyMode ? "ON" : "OFF";
+                    element.className = privacyMode ? "enabled" : "disabled";
+                }
+            });
+
 
             if (!scan) {
 
@@ -54,24 +128,7 @@ if (!tabId) {
 
             }
 
-            const privacyMode =
-                result.privacyMode === true;
-
-            const privacyStatusElement =
-                document.getElementById("privacyStatus");
-
-            if (privacyStatusElement) {
-
-                privacyStatusElement.textContent =
-                    privacyMode
-                        ? "ON"
-                        : "OFF";
-
-                privacyStatusElement.className =
-                    privacyMode
-                        ? "enabled"
-                        : "disabled";
-            }
+            
 
 
             // ==================================

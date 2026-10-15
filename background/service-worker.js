@@ -555,7 +555,7 @@ chrome.runtime.onMessage.addListener(
                             aiRequestsInProgress.add(
                                 tabId
                             );
-
+                            console.log("[TreatLens DEBUG] AI flow entered:", tabId);
 
 
                             // ==================================
@@ -649,6 +649,20 @@ chrome.runtime.onMessage.addListener(
 
                                             const privacyMode =
                                                 privacyResult.privacyMode === true;
+                                            console.log(
+                                                "[TreatLens DEBUG] Privacy mode:",
+                                                privacyResult.privacyMode
+                                            );
+
+                                            console.log(
+                                                "[TreatLens DEBUG] Current fingerprint:",
+                                                currentFingerprint
+                                            );
+
+                                            console.log(
+                                                "[TreatLens DEBUG] Last fingerprint:",
+                                                lastFingerprint
+                                            );
 
 
                                             // ==================================
