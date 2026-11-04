@@ -2,7 +2,7 @@ function normalizeFindings(findings, category) {
 
     return (findings || []).map((finding) => {
 
-        return {
+        const normalized = {
             category: category,
 
             type:
@@ -18,9 +18,24 @@ function normalizeFindings(findings, category) {
                 "No reason provided"
         };
 
+        if (finding.details) {
+            normalized.details = finding.details;
+        }
+
+        return normalized;
     });
 
 }
+
+const informationalTypes = [
+    "NO_SUSPICIOUS_DOM_PATTERN",
+    "NO_FORM_SECURITY_ISSUE",
+    "NO_SUSPICIOUS_SCRIPT_IFRAME_PATTERN",
+    "NO_SENSITIVE_DATA",
+    "NO_PROMPT_INJECTION",
+    "NO_SUSPICIOUS_URL_PATTERN"
+];
+
 const severityWeight = {
     SAFE: 0,
     LOW: 1,
@@ -62,14 +77,18 @@ function applyCorrelationRules(findings) {
         findings.some(
             finding =>
                 finding.category === "URL" &&
+                finding.type !== "NO_SUSPICIOUS_URL_PATTERN" &&
+                finding.severity !== "LOW" &&
                 (
                     finding.severity === "HIGH" ||
-                    finding.reason
-                        .toLowerCase()
-                        .includes("suspicious") ||
-                    finding.reason
-                        .toLowerCase()
-                        .includes("punycode")
+                    (
+                        typeof finding.reason === "string" &&
+                        !finding.reason.toLowerCase().startsWith("no suspicious") &&
+                        (
+                            finding.reason.toLowerCase().includes("suspicious") ||
+                            finding.reason.toLowerCase().includes("punycode")
+                        )
+                    )
                 )
         );
 
@@ -210,158 +229,86 @@ function applyCorrelationRules(findings) {
     return correlationReasons;
 
 }
+
 function calculateOverallRisk(findings) {
 
-    // =====================================
-    // NO FINDINGS
-    // =====================================
+    // Filter out purely informational passed-checks
+    const actualFindings = (findings || []).filter(
+        (f) => f && !informationalTypes.includes(f.type)
+    );
 
-    if (!findings || findings.length === 0) {
-
+    // =====================================
+    // NO ACTUAL FINDINGS -> SAFE
+    // =====================================
+    if (actualFindings.length === 0) {
         return {
             level: "SAFE",
             reasons: [
-                "No security findings detected"
+                "No significant security indicators detected"
             ]
         };
-
     }
 
-
     // =====================================
-    // HIGHEST SEVERITY
+    // HIGHEST SEVERITY AMONG ACTUAL FINDINGS
     // =====================================
-
     let highestWeight = 0;
 
-    findings.forEach((finding) => {
-
-        const weight =
-            getSeverityWeight(
-                finding.severity
-            );
-
+    actualFindings.forEach((finding) => {
+        const weight = getSeverityWeight(finding.severity);
         if (weight > highestWeight) {
             highestWeight = weight;
         }
-
     });
-
 
     // =====================================
     // CORRELATION
     // =====================================
-
-    const correlationReasons =
-        applyCorrelationRules(
-            findings
-        );
-
+    const correlationReasons = applyCorrelationRules(actualFindings);
 
     // =====================================
     // RISK LEVEL
     // =====================================
-
     let level = "SAFE";
 
-
     if (highestWeight >= 4) {
-
         level = "CRITICAL";
-
     } else if (highestWeight === 3) {
-
         level = "HIGH";
-
     } else if (highestWeight === 2) {
-
         level = "MEDIUM";
-
     } else if (highestWeight === 1) {
-
         level = "LOW";
-
     }
 
-
     // =====================================
-    // CORRELATION CAN INCREASE RISK
+    // CORRELATION ELEVATIONS
     // =====================================
-
-    if (
-        correlationReasons.length >= 2 &&
-        level === "MEDIUM"
-    ) {
-
+    if (correlationReasons.length >= 2 && level === "MEDIUM") {
         level = "HIGH";
-
     }
-
 
     if (
         correlationReasons.length >= 3 &&
-        (
-            level === "HIGH" ||
-            level === "MEDIUM"
-        )
+        (level === "HIGH" || level === "MEDIUM")
     ) {
-
         level = "CRITICAL";
-
     }
 
-
     // =====================================
-    // WHY?
+    // REASONS
     // =====================================
+    const reasons = actualFindings
+        .filter((finding) => finding.severity !== "LOW")
+        .map((finding) => finding.reason);
 
-    const informationalTypes = [
-        "NO_SUSPICIOUS_DOM_PATTERN",
-        "NO_FORM_SECURITY_ISSUE",
-        "NO_SUSPICIOUS_SCRIPT_IFRAME_PATTERN",
-        "NO_SENSITIVE_DATA",
-        "NO_PROMPT_INJECTION",
-        "NO_SUSPICIOUS_URL_PATTERN"
-    ];
-
-    const reasons = findings
-        .filter(
-            finding =>
-                finding.severity !== "LOW" &&
-                !informationalTypes.includes(
-                    finding.type
-                )
-        )
-        .map(
-            finding =>
-                finding.reason
-        );
-
-
-    correlationReasons.forEach(
-        reason => {
-
-            if (
-                !reasons.includes(reason)
-            ) {
-
-                reasons.push(reason);
-
-            }
-
+    correlationReasons.forEach((reason) => {
+        if (!reasons.includes(reason)) {
+            reasons.push(reason);
         }
-    );
+    });
 
-
-    // Remove duplicate reasons
-
-    const uniqueReasons =
-        [...new Set(reasons)];
-
-
-    // =====================================
-    // FINAL RESULT
-    // =====================================
+    const uniqueReasons = [...new Set(reasons)];
 
     return {
         level: level,

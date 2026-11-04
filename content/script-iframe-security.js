@@ -1,64 +1,39 @@
+
 console.log("SentinelAI Script & Iframe Security Engine loaded");
 
-
 function analyzeScriptIframeSecurity() {
-
     const findings = [];
-
 
     // =========================================
     // 1. EXTERNAL SCRIPTS
     // =========================================
 
-    const scripts =
-        document.querySelectorAll("script[src]");
-
+    const scripts = document.querySelectorAll("script[src]");
     let externalScriptCount = 0;
 
     scripts.forEach((script) => {
-
         const src = script.src;
-
-        if (!src) {
-            return;
-        }
+        if (!src) return;
 
         try {
+            const scriptURL = new URL(src, window.location.href);
 
-            const scriptURL =
-                new URL(
-                    src,
-                    window.location.href
-                );
-
-            if (
-                scriptURL.origin !==
-                window.location.origin
-            ) {
-
+            if (scriptURL.origin !== window.location.origin) {
                 externalScriptCount++;
-
             }
-
         } catch (error) {
             // Ignore invalid URLs
         }
-
     });
 
-
     if (externalScriptCount > 0) {
-
         findings.push({
             category: "SCRIPT",
             type: "EXTERNAL_SCRIPT",
             severity: "LOW",
-            reason:
-                `${externalScriptCount} external script(s) detected`
+            reason: `${externalScriptCount} external script(s) detected`
         });
-
     }
-
 
     // =========================================
     // 2. SUSPICIOUS SCRIPT SOURCES
@@ -71,68 +46,42 @@ function analyzeScriptIframeSecurity() {
     ];
 
     scripts.forEach((script) => {
-
         const src = script.src;
-
-        if (!src) {
-            return;
-        }
+        if (!src) return;
 
         try {
+            const scriptURL = new URL(src, window.location.href);
+            const hostname = scriptURL.hostname.toLowerCase();
 
-            const scriptURL =
-                new URL(
-                    src,
-                    window.location.href
-                );
-
-            const hostname =
-                scriptURL.hostname.toLowerCase();
-
-
-            if (
-                suspiciousDomains.includes(hostname)
-            ) {
-
+            if (suspiciousDomains.includes(hostname)) {
                 findings.push({
                     category: "SCRIPT",
                     type: "SUSPICIOUS_SCRIPT_SOURCE",
                     severity: "HIGH",
-                    reason:
-                        `Suspicious external script source detected: ${hostname}`
+                    reason: `Suspicious external script source detected: ${hostname}`
                 });
-
             }
-
         } catch (error) {
             // Ignore invalid URLs
         }
-
     });
 
-
     // =========================================
-    // 3. INLINE SCRIPT INDICATORS
+    // 3. INLINE SCRIPTS
     // =========================================
 
-    const inlineScripts =
-        document.querySelectorAll(
-            "script:not([src])"
-        );
-
+    const inlineScripts = document.querySelectorAll(
+        "script:not([src])"
+    );
 
     if (inlineScripts.length > 0) {
-
         findings.push({
             category: "SCRIPT",
             type: "INLINE_SCRIPT",
             severity: "LOW",
-            reason:
-                `${inlineScripts.length} inline script(s) detected`
+            reason: `${inlineScripts.length} inline script(s) detected`
         });
-
     }
-
 
     // =========================================
     // 4. DANGEROUS JAVASCRIPT APIs
@@ -148,62 +97,41 @@ function analyzeScriptIframeSecurity() {
         "setInterval("
     ];
 
-
     let dangerousAPICount = 0;
 
-
     inlineScripts.forEach((script) => {
-
-        const code =
-            script.textContent || "";
-
+        const code = script.textContent || "";
 
         dangerousAPIs.forEach((api) => {
-
             if (code.includes(api)) {
-
                 dangerousAPICount++;
-
             }
-
         });
-
     });
 
-
     if (dangerousAPICount > 0) {
-
         findings.push({
             category: "SCRIPT",
             type: "DANGEROUS_API",
             severity: "MEDIUM",
-            reason:
-                `${dangerousAPICount} potentially dangerous JavaScript API reference(s) detected`
+            reason: `${dangerousAPICount} potentially dangerous JavaScript API reference(s) detected`
         });
-
     }
-
 
     // =========================================
     // 5. IFRAMES
     // =========================================
 
-    const iframes =
-        document.querySelectorAll("iframe");
-
+    const iframes = document.querySelectorAll("iframe");
 
     if (iframes.length > 0) {
-
         findings.push({
             category: "IFRAME",
             type: "IFRAME_DETECTED",
             severity: "LOW",
-            reason:
-                `${iframes.length} iframe(s) detected`
+            reason: `${iframes.length} iframe(s) detected`
         });
-
     }
-
 
     // =========================================
     // 6. CROSS-ORIGIN IFRAMES
@@ -211,55 +139,29 @@ function analyzeScriptIframeSecurity() {
 
     let crossOriginIframeCount = 0;
 
-
     iframes.forEach((iframe) => {
-
-        const src =
-            iframe.getAttribute("src");
-
-
-        if (!src) {
-            return;
-        }
-
+        const src = iframe.getAttribute("src");
+        if (!src) return;
 
         try {
+            const iframeURL = new URL(src, window.location.href);
 
-            const iframeURL =
-                new URL(
-                    src,
-                    window.location.href
-                );
-
-
-            if (
-                iframeURL.origin !==
-                window.location.origin
-            ) {
-
+            if (iframeURL.origin !== window.location.origin) {
                 crossOriginIframeCount++;
-
             }
-
         } catch (error) {
             // Ignore invalid URLs
         }
-
     });
 
-
     if (crossOriginIframeCount > 0) {
-
         findings.push({
             category: "IFRAME",
             type: "CROSS_ORIGIN_IFRAME",
             severity: "MEDIUM",
-            reason:
-                `${crossOriginIframeCount} cross-origin iframe(s) detected`
+            reason: `${crossOriginIframeCount} cross-origin iframe(s) detected`
         });
-
     }
-
 
     // =========================================
     // 7. HIDDEN IFRAMES
@@ -267,113 +169,73 @@ function analyzeScriptIframeSecurity() {
 
     let hiddenIframeCount = 0;
 
-
     iframes.forEach((iframe) => {
+        try {
+            const style = window.getComputedStyle(iframe);
 
-        const style =
-            window.getComputedStyle(iframe);
+            const hiddenByStyle =
+                style &&
+                (style.display === "none" ||
+                style.visibility === "hidden");
 
+            const hiddenByAttribute =
+                iframe.hidden ||
+                iframe.hasAttribute("hidden");
 
-        const hiddenByStyle =
-            style.display === "none" ||
-            style.visibility === "hidden";
-
-
-        const hiddenByAttribute =
-            iframe.hidden ||
-            iframe.hasAttribute("hidden");
-
-
-        if (
-            hiddenByStyle ||
-            hiddenByAttribute
-        ) {
-
-            hiddenIframeCount++;
-
+            if (hiddenByStyle || hiddenByAttribute) {
+                hiddenIframeCount++;
+            }
+        } catch (error) {
+            // Ignore iframe style access errors
         }
-
     });
 
-
     if (hiddenIframeCount > 0) {
-
         findings.push({
             category: "IFRAME",
             type: "HIDDEN_IFRAME",
             severity: "MEDIUM",
-            reason:
-                `${hiddenIframeCount} hidden iframe(s) detected`
+            reason: `${hiddenIframeCount} hidden iframe(s) detected`
         });
-
     }
-
 
     // =========================================
     // 8. SUSPICIOUS IFRAME SOURCE
     // =========================================
 
     iframes.forEach((iframe) => {
-
-        const src =
-            iframe.getAttribute("src");
-
-
-        if (!src) {
-            return;
-        }
-
+        const src = iframe.getAttribute("src");
+        if (!src) return;
 
         try {
+            const iframeURL = new URL(src, window.location.href);
+            const hostname = iframeURL.hostname.toLowerCase();
 
-            const iframeURL =
-                new URL(
-                    src,
-                    window.location.href
-                );
-
-
-            const hostname =
-                iframeURL.hostname.toLowerCase();
-
-
-            if (
-                suspiciousDomains.includes(hostname)
-            ) {
-
+            if (suspiciousDomains.includes(hostname)) {
                 findings.push({
                     category: "IFRAME",
                     type: "SUSPICIOUS_IFRAME_SOURCE",
                     severity: "HIGH",
-                    reason:
-                        `Suspicious iframe source detected: ${hostname}`
+                    reason: `Suspicious iframe source detected: ${hostname}`
                 });
-
             }
-
         } catch (error) {
             // Ignore invalid URLs
         }
-
     });
-
 
     // =========================================
     // 9. NO FINDINGS
     // =========================================
 
     if (findings.length === 0) {
-
         findings.push({
             category: "SCRIPT_IFRAME",
             type: "NO_SUSPICIOUS_SCRIPT_IFRAME_PATTERN",
             severity: "LOW",
-            reason:
-                "No suspicious script or iframe patterns detected"
+            reason: "No suspicious script or iframe patterns detected"
         });
-
     }
-
 
     return findings;
 }

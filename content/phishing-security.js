@@ -18,11 +18,22 @@ function analyzePhishingRisk(
     // =========================================
 
     const suspiciousURL =
-        urlFindings.some(
+        (urlFindings || []).some(
             finding =>
-                finding.severity === "HIGH" ||
-                finding.reason.toLowerCase().includes("suspicious") ||
-                finding.reason.toLowerCase().includes("punycode")
+                finding &&
+                finding.type !== "NO_SUSPICIOUS_URL_PATTERN" &&
+                finding.severity !== "LOW" &&
+                (
+                    finding.severity === "HIGH" ||
+                    (
+                        typeof finding.reason === "string" &&
+                        !finding.reason.toLowerCase().startsWith("no suspicious") &&
+                        (
+                            finding.reason.toLowerCase().includes("suspicious") ||
+                            finding.reason.toLowerCase().includes("punycode")
+                        )
+                    )
+                )
         );
 
 

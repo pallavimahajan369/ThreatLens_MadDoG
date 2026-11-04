@@ -183,31 +183,34 @@ function analyzeFormSecurity() {
         const action =
             form.getAttribute("action");
 
+        try {
+            const formAction =
+                action
+                    ? new URL(
+                        action,
+                        window.location.href
+                    )
+                    : new URL(
+                        window.location.href
+                    );
 
-        const formAction =
-            action
-                ? new URL(
-                    action,
-                    window.location.href
-                )
-                : new URL(
-                    window.location.href
-                );
+            if (
+                formAction.origin &&
+                formAction.origin !== "null" &&
+                formAction.origin !== window.location.origin
+            ) {
 
+                findings.push({
+                    category: "FORM",
+                    type: "CROSS_ORIGIN_ACTION",
+                    severity: "HIGH",
+                    reason:
+                        `Form submits to a different origin: ${formAction.origin}`
+                });
 
-        if (
-            formAction.origin !==
-            window.location.origin
-        ) {
-
-            findings.push({
-                category: "FORM",
-                type: "CROSS_ORIGIN_ACTION",
-                severity: "HIGH",
-                reason:
-                    `Form submits to a different origin: ${formAction.origin}`
-            });
-
+            }
+        } catch (error) {
+            // Ignore malformed actions without crashing
         }
 
     });

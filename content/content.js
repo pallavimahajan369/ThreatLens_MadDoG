@@ -1,157 +1,163 @@
 function scanPage(reason = "page-load") {
+    try {
+        const currentURL = window.location.href;
 
-    const currentURL = window.location.href;
+        // ===============================
+        // BASIC PAGE INFORMATION
+        // ===============================
+        const result = {
+            url: currentURL,
+            title: document.title || "",
+            forms: document.forms?.length || 0,
+            scripts: document.scripts?.length || 0,
+            iframes: document.querySelectorAll("iframe").length,
+            timestamp: new Date().toISOString(),
+            reason: reason
+        };
 
+        // ===============================
+        // URL SECURITY ANALYSIS
+        // ===============================
+        let urlFindings = [];
+        try {
+            urlFindings = analyzeURL(currentURL);
+        } catch (e) {
+            console.error("SentinelAI: analyzeURL error:", e);
+        }
+        result.urlFindings = urlFindings;
 
-    // ===============================
-    // BASIC PAGE INFORMATION
-    // ===============================
+        // ===============================
+        // DOM SECURITY ANALYSIS
+        // ===============================
+        let domFindings = [];
+        try {
+            domFindings = analyzeDOM();
+        } catch (e) {
+            console.error("SentinelAI: analyzeDOM error:", e);
+        }
+        result.domFindings = domFindings;
 
-    const result = {
+        // ===============================
+        // FORM SECURITY ANALYSIS
+        // ===============================
+        let formFindings = [];
+        try {
+            formFindings = analyzeFormSecurity();
+        } catch (e) {
+            console.error("SentinelAI: analyzeFormSecurity error:", e);
+        }
+        result.formFindings = formFindings;
 
-        url: currentURL,
+        // ===============================
+        // SCRIPT & IFRAME SECURITY
+        // ===============================
+        let scriptIframeFindings = [];
+        try {
+            scriptIframeFindings = analyzeScriptIframeSecurity();
+        } catch (e) {
+            console.error("SentinelAI: analyzeScriptIframeSecurity error:", e);
+        }
+        result.scriptIframeFindings = scriptIframeFindings;
 
-        title: document.title,
+        // ===============================
+        // SENSITIVE DATA SECURITY
+        // ===============================
+        let sensitiveDataFindings = [];
+        try {
+            sensitiveDataFindings = analyzeSensitiveData();
+        } catch (e) {
+            console.error("SentinelAI: analyzeSensitiveData error:", e);
+        }
+        result.sensitiveDataFindings = sensitiveDataFindings;
 
-        forms: document.forms.length,
+        // ===============================
+        // PROMPT INJECTION SECURITY
+        // ===============================
+        let promptInjectionFindings = [];
+        try {
+            promptInjectionFindings = analyzePromptInjection();
+        } catch (e) {
+            console.error("SentinelAI: analyzePromptInjection error:", e);
+        }
+        result.promptInjectionFindings = promptInjectionFindings;
 
-        scripts: document.scripts.length,
+        // ===============================
+        // PHISHING SECURITY
+        // ===============================
+        let phishingRisk = { score: 0, risk: "LOW", signals: [] };
+        try {
+            phishingRisk = analyzePhishingRisk(
+                urlFindings,
+                domFindings,
+                formFindings,
+                scriptIframeFindings
+            );
+        } catch (e) {
+            console.error("SentinelAI: analyzePhishingRisk error:", e);
+        }
+        result.phishingRisk = phishingRisk;
 
-        iframes:
-            document.querySelectorAll("iframe").length,
+        // ===============================
+        // RISK ENGINE
+        // ===============================
+        const allFindings = [
+            ...normalizeFindings(urlFindings, "URL"),
+            ...normalizeFindings(domFindings, "DOM"),
+            ...normalizeFindings(formFindings, "FORM"),
+            ...normalizeFindings(scriptIframeFindings, "SCRIPT_IFRAME"),
+            ...normalizeFindings(sensitiveDataFindings, "SENSITIVE_DATA"),
+            ...normalizeFindings(promptInjectionFindings, "PROMPT_INJECTION")
+        ];
 
-        timestamp:
-            new Date().toISOString(),
+        let riskResult = { level: "SAFE", reasons: ["No significant security indicators detected"] };
+        try {
+            riskResult = calculateOverallRisk(allFindings);
+        } catch (e) {
+            console.error("SentinelAI: calculateOverallRisk error:", e);
+        }
+        result.risk = riskResult;
 
-        reason: reason
-    };
+        console.log("SentinelAI Scan Result:", result);
 
+        try {
+            chrome.runtime.sendMessage(
+                {
+                    type: "SCAN_RESULT",
+                    data: result
+                },
+                (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.warn(
+                            "SentinelAI: Message delivery:",
+                            chrome.runtime.lastError.message
+                        );
+                        return;
+                    }
+                    console.log(
+                        "SentinelAI: Service Worker response:",
+                        response
+                    );
+                }
+            );
+        } catch (msgErr) {
+            console.warn("SentinelAI: Failed to send SCAN_RESULT:", msgErr.message);
+        }
 
-    // ===============================
-    // URL SECURITY ANALYSIS
-    // ===============================
-
-    const urlFindings =
-        analyzeURL(currentURL);
-
-
-    result.urlFindings = urlFindings;
-
-    const domFindings = analyzeDOM();
-
-    result.domFindings = domFindings;
-
-    const formFindings = analyzeFormSecurity();
-
-    result.formFindings = formFindings;
-
-    const scriptIframeFindings =
-        analyzeScriptIframeSecurity();
-
-    result.scriptIframeFindings =
-        scriptIframeFindings;
-
-    const sensitiveDataFindings =
-        analyzeSensitiveData();
-
-    result.sensitiveDataFindings =
-        sensitiveDataFindings;
-
-    const promptInjectionFindings =
-        analyzePromptInjection();
-
-    result.promptInjectionFindings =
-        promptInjectionFindings;
-    
-    
-    const phishingRisk =
-        analyzePhishingRisk(
-            urlFindings,
-            domFindings,
-            formFindings,
-            scriptIframeFindings
-        );
-
-    result.phishingRisk =
-        phishingRisk;
-
-    // ===============================
-    // RISK ENGINE
-    // ===============================
-
-    const allFindings = [
-
-        ...normalizeFindings(
-            urlFindings,
-            "URL"
-        ),
-
-        ...normalizeFindings(
-            domFindings,
-            "DOM"
-        ),
-
-        ...normalizeFindings(
-            formFindings,
-            "FORM"
-        ),
-
-        ...normalizeFindings(
-            scriptIframeFindings,
-            "SCRIPT_IFRAME"
-        ),
-
-        ...normalizeFindings(
-            sensitiveDataFindings,
-            "SENSITIVE_DATA"
-        ),
-
-        ...normalizeFindings(
-            promptInjectionFindings,
-            "PROMPT_INJECTION"
-        )
-
-    ];
-
-
-    const riskResult =
-        calculateOverallRisk(
-            allFindings
-        );
-
-
-    result.risk = riskResult;
-
-
-    console.log(
-        "SentinelAI Risk Result:",
-        riskResult
-    );
-
-    
-
-    
-
-    // ===============================
-    // CONSOLE
-    // ===============================
-
-    console.log(
-        "SentinelAI Scan Result:",
-        result
-    );
-
-    chrome.runtime.sendMessage({
-        type: "SCAN_RESULT",
-        data: result
-    });
-
-    console.log(
-        "SentinelAI: SCAN_RESULT message sent to Service Worker"
-    );
-
-
+        return result;
+    } catch (err) {
+        console.error("SentinelAI: scanPage critical error:", err);
+    }
 }
+
+// Listen for on-demand scan requests (from popup or dashboard)
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request && (request.action === "REQUEST_SCAN" || request.type === "REQUEST_SCAN")) {
+        console.log("SentinelAI: Handling on-demand REQUEST_SCAN");
+        const res = scanPage("on-demand");
+        sendResponse({ success: true, data: res });
+        return true;
+    }
+});
 
 // START INITIAL SCAN
 scanPage("page-load");

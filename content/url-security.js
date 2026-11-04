@@ -52,6 +52,7 @@ function analyzeURL(url) {
 
         return [{
             category: "URL",
+            type: "INVALID_URL",
             severity: "HIGH",
             reason: "Invalid URL detected"
         }];
@@ -68,6 +69,8 @@ function analyzeURL(url) {
         findings.push({
 
             category: "URL",
+
+            type: "HTTP_PROTOCOL",
 
             severity: "MEDIUM",
 
@@ -93,6 +96,8 @@ function analyzeURL(url) {
 
             category: "URL",
 
+            type: "IP_ADDRESS",
+
             severity: "MEDIUM",
 
             reason: "Website is accessed using an IP address"
@@ -116,6 +121,8 @@ function analyzeURL(url) {
 
             category: "URL",
 
+            type: "SUSPICIOUS_TLD",
+
             severity: "MEDIUM",
 
             reason: `Suspicious top-level domain detected: .${tld}`
@@ -137,6 +144,8 @@ function analyzeURL(url) {
         findings.push({
 
             category: "URL",
+
+            type: "EXCESSIVE_SUBDOMAINS",
 
             severity: "MEDIUM",
 
@@ -161,6 +170,8 @@ function analyzeURL(url) {
 
             category: "URL",
 
+            type: "URL_OBFUSCATION",
+
             severity: "MEDIUM",
 
             reason: "Potential URL obfuscation pattern detected"
@@ -181,6 +192,8 @@ function analyzeURL(url) {
         findings.push({
 
             category: "URL",
+
+            type: "ENCODED_CHARACTERS",
 
             severity: "LOW",
 
@@ -209,6 +222,8 @@ function analyzeURL(url) {
 
             category: "URL",
 
+            type: "SUSPICIOUS_KEYWORDS",
+
             severity: "MEDIUM",
 
             reason:
@@ -229,6 +244,8 @@ function analyzeURL(url) {
         findings.push({
 
             category: "URL",
+
+            type: "PUNYCODE_DOMAIN",
 
             severity: "HIGH",
 
@@ -256,6 +273,8 @@ function analyzeURL(url) {
 
             category: "URL",
 
+            type: "UNUSUAL_PORT",
+
             severity: "LOW",
 
             reason:
@@ -276,6 +295,8 @@ function analyzeURL(url) {
 
             category: "URL",
 
+            type: "LONG_URL",
+
             severity: "MEDIUM",
 
             reason:
@@ -295,6 +316,8 @@ function analyzeURL(url) {
         findings.push({
 
             category: "URL",
+
+            type: "NO_SUSPICIOUS_URL_PATTERN",
 
             severity: "LOW",
 

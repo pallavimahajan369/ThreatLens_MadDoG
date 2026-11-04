@@ -1,3 +1,39 @@
+console.log("SentinelAI Popup script loaded");
+
+const informationalTypes = [
+    "NO_SUSPICIOUS_DOM_PATTERN",
+    "NO_FORM_SECURITY_ISSUE",
+    "NO_SUSPICIOUS_SCRIPT_IFRAME_PATTERN",
+    "NO_SENSITIVE_DATA",
+    "NO_PROMPT_INJECTION",
+    "NO_SUSPICIOUS_URL_PATTERN"
+];
+
+function isRestrictedUrl(url) {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    return (
+        lower.startsWith("chrome://") ||
+        lower.startsWith("chrome-extension://") ||
+        lower.startsWith("edge://") ||
+        lower.startsWith("about:") ||
+        lower.startsWith("devtools://") ||
+        lower.startsWith("view-source:") ||
+        lower.includes("chromewebstore.google.com") ||
+        lower.includes("chrome.google.com/webstore")
+    );
+}
+
+function isSamePage(urlA, urlB) {
+    if (!urlA || !urlB) return false;
+    try {
+        const a = new URL(urlA);
+        const b = new URL(urlB);
+        return a.origin === b.origin;
+    } catch (e) {
+        return urlA === urlB;
+    }
+}
 
 document.addEventListener("DOMContentLoaded", () => {
 
@@ -22,258 +58,224 @@ document.addEventListener("DOMContentLoaded", () => {
     const privacyStatusElement =
         document.getElementById("privacyStatus");
 
-
-    /*
-     * Get active tab
-     */
-    chrome.tabs.query(
-        {
-            active: true,
-            currentWindow: true
-        },
-        (tabs) => {
-
-            if (!tabs || !tabs.length) {
-                return;
-            }
-
-            const currentTab = tabs[0];
-
-            const tabId = currentTab.id;
-
-            const currentUrl =
-                currentTab.url || "Unknown";
-
-
-            /*
-             * Display current website
-             */
-            if (currentUrlElement) {
-
-                currentUrlElement.textContent =
-                    currentUrl;
-            }
-
-
-            /*
-             * Read current scan + extension scan
-             */
-            chrome.storage.local.get(
-                [
-                    `scan_${tabId}`,
-                    "extensionScan",
-                    "privacyMode"
-                ],
-                (result) => {
-
-                    const scan =
-                        result[`scan_${tabId}`];
-
-                    const extensionScan =
-                        result.extensionScan || [];
-
-
-                    /*
-                     * Website risk
-                     */
-                    const websiteRisk =
-                        scan?.risk?.level ||
-                        "LOW";
-
-
-                    /*
-                     * Overall risk
-                     *
-                     * Extension risk should not
-                     * automatically increase
-                     * website/overall risk.
-                     */
-                    const overallRisk =
-                        scan?.overallRisk ||
-                        websiteRisk;
-
-
-                    if (riskLevelElement) {
-
-                        riskLevelElement.textContent =
-                            `${overallRisk} RISK`;
-                    }
-
-
-                    /*
-                     * Risk icon
-                     */
-                    if (riskIconElement) {
-
-                        if (
-                            overallRisk === "CRITICAL" ||
-                            overallRisk === "HIGH"
-                        ) {
-
-                            riskIconElement.textContent =
-                                "🔴";
-
-                        } else if (
-                            overallRisk === "MEDIUM"
-                        ) {
-
-                            riskIconElement.textContent =
-                                "🟠";
-
-                        } else if (
-                            overallRisk === "LOW"
-                        ) {
-
-                            riskIconElement.textContent =
-                                "🟡";
-
-                        } else {
-
-                            riskIconElement.textContent =
-                                "🟢";
-                        }
-                    }
-
-
-                    /*
-                     * Website findings
-                     */
-                    const websiteFindings = [
-
-                        ...(scan?.urlFindings || []),
-
-                        ...(scan?.domFindings || []),
-
-                        ...(scan?.formFindings || []),
-
-                        ...(scan?.scriptIframeFindings || []),
-
-                        ...(scan?.sensitiveDataFindings || []),
-
-                        ...(scan?.promptInjectionFindings || [])
-
-                    ];
-
-
-                    if (websiteFindingsElement) {
-
-                        websiteFindingsElement.textContent =
-                            websiteFindings.length;
-                    }
-
-
-                    /*
-                     * Extension findings
-                     */
-                    let totalExtensionFindings = 0;
-
-                    extensionScan.forEach(
-                        (extension) => {
-
-                            totalExtensionFindings +=
-                                (
-                                    extension.findings || []
-                                ).length;
-
-                        }
-                    );
-
-
-                    if (extensionFindingsElement) {
-
-                        extensionFindingsElement.textContent =
-                            totalExtensionFindings;
-                    }
-
-
-                    /*
-                     * AI status
-                     */
-                    if (aiStatusElement) {
-
-                        aiStatusElement.textContent =
-                            "ON";
-                    }
-
-
-                    /*
-                     * Privacy Mode status
-                     */
-                    const privacyMode =
-                        result.privacyMode === true;
-
-
-                    if (privacyStatusElement) {
-
-                        privacyStatusElement.textContent =
-                            privacyMode
-                                ? "ON"
-                                : "OFF";
-
-                        privacyStatusElement.className =
-                            privacyMode
-                                ? "enabled"
-                                : "disabled";
-                    }
-
-                }
-            );
-
-        }
-    );
-
-
-    /*
-     * View Details
-     */
     const detailsButton =
         document.getElementById("detailsBtn");
 
+    function renderPopup(liveScan = null) {
+        chrome.tabs.query(
+            {
+                active: true,
+                currentWindow: true
+            },
+            (tabs) => {
 
-    if (detailsButton) {
+                if (!tabs || !tabs.length) {
+                    return;
+                }
 
-        detailsButton.addEventListener(
-            "click",
-            () => {
+                const currentTab = tabs[0];
+                const tabId = currentTab.id;
+                const currentUrl = currentTab.url || "Unknown";
+                const isRestricted = isRestrictedUrl(currentUrl);
 
-                chrome.tabs.query(
-                    {
-                        active: true,
-                        currentWindow: true
-                    },
-                    (tabs) => {
+                /*
+                 * Display current website URL
+                 */
+                if (currentUrlElement) {
+                    currentUrlElement.textContent = currentUrl;
+                }
 
-                        if (!tabs || !tabs.length) {
-                            return;
+                chrome.storage.local.get(
+                    [
+                        `scan_${tabId}`,
+                        "lastScan",
+                        "extensionScan",
+                        "privacyMode",
+                        "aiEnabled",
+                        "aiConsent"
+                    ],
+                    (result) => {
+
+                        let scan = liveScan;
+                        if (!scan) {
+                            const tabScan = result[`scan_${tabId}`];
+                            // Only use tabScan if it matches current page origin
+                            if (tabScan && (!tabScan.url || isSamePage(tabScan.url, currentUrl))) {
+                                scan = tabScan;
+                            }
+                        }
+                        // Only fallback to lastScan if it genuinely belongs to this website
+                        if (!scan && result.lastScan) {
+                            if (!isRestricted && isSamePage(result.lastScan.url, currentUrl)) {
+                                scan = result.lastScan;
+                            }
                         }
 
-                        const currentTab =
-                            tabs[0];
+                        // If not scanned yet or URL changed, request live scan from tab content script
+                        if (!scan && !isRestricted && tabId) {
+                            try {
+                                chrome.tabs.sendMessage(
+                                    tabId,
+                                    { action: "REQUEST_SCAN" },
+                                    (resp) => {
+                                        if (chrome.runtime.lastError) {
+                                            // Tab content script not reachable yet
+                                        } else if (resp && resp.data) {
+                                            renderPopup(resp.data);
+                                        }
+                                    }
+                                );
+                            } catch (e) {
+                                // Ignore message delivery errors
+                            }
+                        }
 
+                        /*
+                         * Website risk & Overall risk
+                         */
+                        const websiteRisk =
+                            scan?.risk?.level ||
+                            (isRestricted ? "SAFE" : "SAFE");
 
-                        const dashboardUrl =
-                            chrome.runtime.getURL(
-                                "dashboard/dashboard.html"
-                            ) +
-                            "?tabId=" +
-                            currentTab.id +
-                            "&url=" +
-                            encodeURIComponent(
-                                currentTab.url || ""
-                            );
+                        const overallRisk =
+                            scan?.overallRisk ||
+                            websiteRisk;
 
+                        if (riskLevelElement) {
+                            if (isRestricted) {
+                                riskLevelElement.textContent = "SYSTEM PROTECTED";
+                            } else if (overallRisk === "SAFE") {
+                                riskLevelElement.textContent = "SAFE";
+                            } else {
+                                riskLevelElement.textContent = `${overallRisk} RISK`;
+                            }
+                        }
 
-                        chrome.tabs.create({
-                            url: dashboardUrl
+                        /*
+                         * Risk icon
+                         */
+                        if (riskIconElement) {
+                            if (isRestricted) {
+                                riskIconElement.textContent = "🔒";
+                            } else if (
+                                overallRisk === "CRITICAL" ||
+                                overallRisk === "HIGH"
+                            ) {
+                                riskIconElement.textContent = "🔴";
+                            } else if (overallRisk === "MEDIUM") {
+                                riskIconElement.textContent = "🟠";
+                            } else if (overallRisk === "LOW") {
+                                riskIconElement.textContent = "🟡";
+                            } else {
+                                riskIconElement.textContent = "🟢";
+                            }
+                        }
+
+                        /*
+                         * Website findings count (Actual security indicators only)
+                         */
+                        const allRawFindings = [
+                            ...(scan?.urlFindings || []),
+                            ...(scan?.domFindings || []),
+                            ...(scan?.formFindings || []),
+                            ...(scan?.scriptIframeFindings || []),
+                            ...(scan?.sensitiveDataFindings || []),
+                            ...(scan?.promptInjectionFindings || [])
+                        ];
+
+                        const actualFindings = allRawFindings.filter(
+                            (f) => f && !informationalTypes.includes(f.type)
+                        );
+
+                        if (websiteFindingsElement) {
+                            websiteFindingsElement.textContent =
+                                isRestricted ? 0 : actualFindings.length;
+                        }
+
+                        /*
+                         * Extension findings count
+                         */
+                        const extensionScan =
+                            result.extensionScan || [];
+
+                        let totalExtensionFindings = 0;
+                        extensionScan.forEach((extension) => {
+                            totalExtensionFindings +=
+                                (extension.findings || []).length;
                         });
+
+                        if (extensionFindingsElement) {
+                            extensionFindingsElement.textContent =
+                                totalExtensionFindings;
+                        }
+
+                        /*
+                         * AI status
+                         */
+                        const aiEnabled = result.aiEnabled === true;
+                        const aiConsent = result.aiConsent === true;
+                        const aiIsActive = aiEnabled && aiConsent;
+
+                        if (aiStatusElement) {
+                            aiStatusElement.textContent =
+                                aiIsActive ? "ON" : "OFF";
+                            aiStatusElement.className =
+                                aiIsActive ? "enabled" : "disabled";
+                        }
+
+                        /*
+                         * Privacy Mode status
+                         */
+                        if (privacyStatusElement) {
+                            privacyStatusElement.textContent = "ON";
+                            privacyStatusElement.className = "enabled";
+                        }
 
                     }
                 );
 
             }
         );
+    }
 
+    renderPopup();
+
+    // Listen for storage changes in the background while popup is open
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === "local") {
+            renderPopup();
+        }
+    });
+
+    /*
+     * View Details
+     */
+    if (detailsButton) {
+        detailsButton.addEventListener("click", () => {
+            chrome.tabs.query(
+                {
+                    active: true,
+                    currentWindow: true
+                },
+                (tabs) => {
+                    if (!tabs || !tabs.length) {
+                        return;
+                    }
+
+                    const currentTab = tabs[0];
+                    const dashboardUrl =
+                        chrome.runtime.getURL("dashboard/dashboard.html") +
+                        "?tabId=" +
+                        currentTab.id +
+                        "&url=" +
+                        encodeURIComponent(currentTab.url || "");
+
+                    chrome.tabs.create({
+                        url: dashboardUrl
+                    });
+                }
+            );
+        });
     }
 
 });
-

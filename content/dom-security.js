@@ -135,29 +135,31 @@ function analyzeDOM() {
     let hiddenCount = 0;
 
     /*
-     * Only inspect elements that can reasonably
-     * participate in visual/content hiding.
-     *
-     * This avoids querySelectorAll("*") over the
-     * complete DOM tree.
+     * Efficiently inspect elements that declare hidden attributes or styles
+     * to avoid freezing on massive DOM trees.
      */
     const potentiallyHiddenElements =
         document.querySelectorAll(
-            "div, section, article, form, input, textarea, button, a, p, span, img, iframe"
+            "[hidden], [style*='display'], [style*='visibility']"
         );
 
     potentiallyHiddenElements.forEach((element) => {
+        try {
+            const style =
+                window.getComputedStyle(element);
 
-        const style =
-            window.getComputedStyle(element);
-
-        if (
-            style.display === "none" ||
-            style.visibility === "hidden"
-        ) {
-            hiddenCount++;
+            if (
+                style &&
+                (
+                    style.display === "none" ||
+                    style.visibility === "hidden"
+                )
+            ) {
+                hiddenCount++;
+            }
+        } catch (error) {
+            // Ignore detached or inaccessible elements
         }
-
     });
 
 

@@ -9,6 +9,31 @@ const AI_RETRY_COOLDOWN = 5 * 60 * 1000;
 const aiRetryCooldown =
     new Map();
 
+
+chrome.storage.local.get(
+    ["privacyMode", "aiEnabled", "aiConsent"],
+    (settings) => {
+        const defaults = {};
+
+        if (settings.privacyMode === undefined) {
+            defaults.privacyMode = true;
+        }
+
+        if (settings.aiEnabled === undefined) {
+            defaults.aiEnabled = false;
+        }
+
+        if (settings.aiConsent === undefined) {
+            defaults.aiConsent = false;
+        }
+
+        if (Object.keys(defaults).length > 0) {
+            chrome.storage.local.set(defaults);
+        }
+    }
+);
+
+
 // ==================================
 // EXTENSION SECURITY ANALYSIS
 // ==================================
@@ -249,7 +274,8 @@ async function scanInstalledExtensions() {
         extensions
             .filter(
                 extension =>
-                    extension.type === "extension"
+                    extension.type === "extension" &&
+                    extension.id !== chrome.runtime.id
             )
             .map(
                 extension => {
@@ -447,13 +473,40 @@ chrome.runtime.onMessage.addListener(
 
                     message.data.extensionRiskReasons =
                         extensionRiskReasons;
+                    // ==================================
+                    // STORE WEBSITE SCAN RESULT
+                    // ==================================
 
-
+                    chrome.storage.local.set({
+                        lastScan: message.data,
+                        [`scan_${tabId}`]: message.data
+                    })
+                    .then(() => {
+                        console.log(
+                            "TreatLens: Website scan saved for tab:",
+                            tabId
+                        );
+                        sendResponse({
+                            success: true,
+                            message: "Scan result saved"
+                        });
+                    })
+                    .catch((error) => {
+                        console.error(
+                            "TreatLens: Failed to save website scan:",
+                            error
+                        );
+                        sendResponse({
+                            success: false,
+                            message: "Scan result storage failed"
+                        });
+                    });
+                    
                     console.log(
                         "SentinelAI: Building AI payload in Service Worker"
                     );
-
-
+                    
+                    
                     // ==================================
                     // BUILD AI-SAFE PAYLOAD
                     // ==================================
@@ -469,8 +522,7 @@ chrome.runtime.onMessage.addListener(
 
 
                     console.log(
-                        "SentinelAI AI-Safe Payload:",
-                        aiPayload
+                        "TreatLens: Sanitized AI payload prepared."
                     );
 
 
@@ -649,6 +701,7 @@ chrome.runtime.onMessage.addListener(
 
                                             const privacyMode =
                                                 privacyResult.privacyMode === true;
+                                                
                                             console.log(
                                                 "[TreatLens DEBUG] Privacy mode:",
                                                 privacyResult.privacyMode
@@ -665,75 +718,51 @@ chrome.runtime.onMessage.addListener(
                                             );
 
 
-                                            // ==================================
-                                            // PRIVACY MODE ENABLED
-                                            // ==================================
+                                            
+                                           
+                                        chrome.storage.local.get(
+                                            ["aiEnabled", "aiConsent", "privacyMode"],
+                                            (settings) => {
+                                                const aiEnabled = settings.aiEnabled === true;
+                                                const aiConsent = settings.aiConsent === true;
 
-                                            if (privacyMode) {
-
-                                                console.log(
-                                                    "SentinelAI: Privacy Mode enabled. Skipping AI analysis."
-                                                );
-
-                                                /*
-                                                * No AI request is made.
-                                                * Release the lock because
-                                                * processing is complete.
-                                                */
-
-                                                aiRequestsInProgress.delete(
-                                                    tabId
-                                                );
-
-                                                return;
-                                            }
-
-
-                                            // ==================================
-                                            // 5. REQUEST AI
-                                            // ==================================
-
-                                            requestAIAnalysis(
-                                                aiPayload,
-                                                tabId
-                                            )
-
-                                            .then(
-                                                () => {
-
-                                                    /*
-                                                    * Save fingerprint only after
-                                                    * AI analysis completes.
-                                                    */
-
-                                                    return chrome.storage.local.set({
-
-                                                        [`ai_fingerprint_${tabId}`]:
-                                                            currentFingerprint
-
-                                                    });
-
+                                                // Privacy Mode must remain ON.
+                                                if (settings.privacyMode !== true) {
+                                                    chrome.storage.local.set({ privacyMode: true });
                                                 }
-                                            )
 
-                                            .finally(
-                                                () => {
-
-                                                    /*
-                                                    * Release AI request lock.
-                                                    */
-
-                                                    aiRequestsInProgress.delete(
-                                                        tabId
-                                                    );
-
+                                                // AI OFF means no cloud request.
+                                                if (!aiEnabled || !aiConsent) {
                                                     console.log(
-                                                        "SentinelAI: AI request lock released for tab:",
-                                                        tabId
+                                                        "TreatLens: AI disabled or consent missing. Local scan only."
                                                     );
-
+                                                    aiRequestsInProgress.delete(tabId);
+                                                    return;
                                                 }
-                                            );
+
+                                                // aiPayload was prepared above by buildAISecurityPayload().
+                                                // Verify that it removes sensitive values before enabling cloud requests.
+                                                requestAIAnalysis(aiPayload, tabId)
+                                                    .then(() => {
+                                                        return chrome.storage.local.set({
+                                                            [`ai_fingerprint_${tabId}`]: currentFingerprint
+                                                        });
+                                                    })
+                                                    .catch((error) => {
+                                                        console.error(
+                                                            "TreatLens AI analysis failed:",
+                                                            error.message
+                                                        );
+                                                    })
+                                                    .finally(() => {
+                                                        aiRequestsInProgress.delete(tabId);
+                                                    });
+                                            }
+                                        );
+
+
+
+                                                                           
 
                                         }
                                     );
@@ -756,47 +785,17 @@ chrome.runtime.onMessage.addListener(
                         // LOW RISK → NO AI
                         // ==================================
 
-                        console.log(
-                            "SentinelAI: Risk is low. Skipping AI analysis."
-                        );
-
+                        console.log("Service Worker received message type:", message?.type);
                     }
 
 
 
-                    // ==================================
-                    // STORE SCAN RESULT
-                    // ==================================
-
-                    chrome.storage.local.set({
-
-                        lastScan:
-                            message.data,
-
-                        [`scan_${tabId}`]:
-                            message.data
-
-                    })
-                    .then(() => {
-
-                        console.log(
-                            "Scan result stored for tab:",
-                            tabId
-                        );
-
-                    })
-                    .catch((error) => {
-
-                        console.error(
-                            "SentinelAI: Failed to store scan result:",
-                            error
-                        );
-
-                    });
+                    
 
                 }
             );
 
+            return true;
         }
 
     }
@@ -1180,3 +1179,25 @@ async function requestAIAnalysis(
 // ==================================
 
 scanInstalledExtensions();
+
+
+// ==================================
+// AUTO-SCAN ON TAB NAVIGATION
+// ==================================
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (
+        changeInfo.status === "complete" &&
+        tab &&
+        tab.url &&
+        (tab.url.startsWith("http://") || tab.url.startsWith("https://"))
+    ) {
+        chrome.tabs.sendMessage(tabId, { action: "REQUEST_SCAN" }, (response) => {
+            if (chrome.runtime.lastError) {
+                // Tab may still be loading content scripts
+            } else if (response && response.data) {
+                console.log("SentinelAI: Auto-scan completed for tab:", tabId);
+            }
+        });
+    }
+});

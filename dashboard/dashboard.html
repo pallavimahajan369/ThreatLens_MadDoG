@@ -82,7 +82,7 @@
                     <span>Privacy Status</span>
 
                     <strong id="privacyStatusOverview">
-                        PROTECTED
+                        ON
                     </strong>
 
                 </div>
@@ -307,59 +307,67 @@
         </section>
 
 
-        <!-- ========================= -->
+       
         <!-- SETTINGS -->
-        <!-- ========================= -->
-
-        <section>
+        <section class="settings-section">
 
             <h2>Settings</h2>
 
-            <div class="settings-card">
+            <div class="settings-panel">
 
-                <div class="setting-row">
+                <!-- AI SETTINGS -->
+                <div class="ai-setting-card">
 
-                    <span>AI Analysis</span>
+                    <div class="ai-setting-icon">✦</div>
 
-                    <strong>ON</strong>
+                    <div class="ai-setting-info">
+                        <h3>AI Analysis</h3>
+                        <p>Enable AI-powered security insights</p>
+                        <span class="ai-privacy-note">🛡️ Sensitive data is sanitized before AI analysis</span>
+                    </div>
+
+                    <div class="ai-setting-control">
+                        <label class="ai-switch" for="aiAnalysisToggle">
+                            <input type="checkbox" id="aiAnalysisToggle">
+                            <span class="ai-slider"></span>
+                        </label>
+
+                        <strong id="aiAnalysisStatus" class="disabled">OFF</strong>
+                    </div>
 
                 </div>
 
-
-                
+                <!-- PRIVACY MODE -->
                 <div class="setting-row">
-                    <span>Privacy Mode</span>
-
-                    <label>
-                        <input type="checkbox" id="privacyModeToggle">
-                        Enable
-                    </label>
-
-                    <strong id="privacyStatusOverview" class="disabled">OFF</strong>
+                    <div class="setting-info">
+                        <span>🔒 Privacy Mode</span>
+                        <small>Always enabled</small>
+                    </div>
+                    <strong id="privacyStatusSettings" class="enabled">ON</strong>
                 </div>
 
-
-
+                <!-- SCAN SETTINGS -->
                 <div class="setting-row">
-
-                    <span>Scan Settings</span>
-
+                    <div class="setting-info">
+                        <span>🔍 Scan Settings</span>
+                        <small>Website checks run automatically</small>
+                    </div>
                     <strong>Automatic</strong>
-
                 </div>
 
-
+                <!-- LOCAL SCANNING -->
                 <div class="setting-row">
-
-                    <span>Local-only Mode</span>
-
-                    <strong>OFF</strong>
-
+                    <div class="setting-info">
+                        <span>💻 Local Scanning</span>
+                        <small>Local security checks remain available</small>
+                    </div>
+                    <strong id="localOnlyStatus" class="enabled">ON</strong>
                 </div>
 
             </div>
 
         </section>
+
 
 
     </main>

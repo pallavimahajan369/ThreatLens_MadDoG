@@ -1,215 +1,139 @@
-console.log("SentinelAI AI Sanitizer loaded");
 
+console.log("TreatLens AI Sanitizer loaded");
 
-// ==================================
-// SANITIZE FINDINGS
-// ==================================
+// Allow only known security levels.
+const ALLOWED_RISKS = new Set([
+    "SAFE", "LOW", "MEDIUM", "HIGH", "CRITICAL"
+]);
 
-function sanitizeFindings(findings) {
+const ALLOWED_SEVERITIES = new Set([
+    "LOW", "MEDIUM", "HIGH", "CRITICAL"
+]);
 
-    return (findings || []).map((finding) => {
-
-        return {
-
-            category:
-                finding.category ||
-                "UNKNOWN",
-
-            type:
-                finding.type ||
-                "UNKNOWN",
-
-            severity:
-                finding.severity ||
-                "LOW",
-
-            reason:
-                sanitizeReason(
-                    finding.reason ||
-                    "No reason provided"
-                )
-        };
-
-    });
-
+function safeEnum(value, allowed, fallback) {
+    const normalized = String(value || "").toUpperCase();
+    return allowed.has(normalized) ? normalized : fallback;
 }
 
-
-// ==================================
-// SANITIZE REASONS
-// ==================================
+// Remove common secrets and unnecessary identifying data.
 
 function sanitizeReason(reason) {
-
-    if (!reason) {
-        return "No reason provided";
+    if (typeof reason !== "string") {
+        return "Security indicator detected";
     }
 
-    let sanitized = String(reason);
+    let value = reason.slice(0, 1000);
 
-
-    // ==================================
-    // Remove JWT-like values
-    // ==================================
-
-    sanitized = sanitized.replace(
-        /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
-        "[REDACTED]"
-    );
-
-
-    // ==================================
-    // Remove AWS Access Key-like values
-    // ==================================
-
-    sanitized = sanitized.replace(
-        /\bAKIA[0-9A-Z]{16}\b/g,
-        "[REDACTED]"
-    );
-
-
-    // ==================================
-    // Remove token / secret assignments
-    // ==================================
-
-    sanitized = sanitized.replace(
-        /\b(?:token|secret|api[_-]?key|access[_-]?token)\s*[:=]\s*["']?[A-Za-z0-9_.\/+=-]{8,}["']?/gi,
-        "[REDACTED]"
-    );
-
-
-    // ==================================
-    // Remove password assignments
-    // ==================================
-
-    sanitized = sanitized.replace(
-        /\b(?:password|passwd|pwd)\s*[:=]\s*["']?[^\s"']{6,}["']?/gi,
-        "[REDACTED]"
-    );
-
-
-    return sanitized;
+    return value
+        // JWT-like tokens
+        .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED]")
+        // AWS access key IDs
+        .replace(/\bAKIA[0-9A-Z]{16}\b/g, "[REDACTED]")
+        // Authorization credentials
+        .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*/gi, "$1 [REDACTED]")
+        // Secrets and API tokens: token=abc, api_key: "abc"
+        .replace(/\b(token|secret|api[_-]?key|access[_-]?token|client[_-]?secret)\b\s*[:=]\s*["']?[^"' \t\r\n,;]+["']?/gi, "$1=[REDACTED]")
+        // Password assignments
+        .replace(/\b(password|passwd|pwd)\b\s*[:=]\s*["']?[^"' \t\r\n,;]+["']?/gi, "$1=[REDACTED]")
+        // Email addresses
+        .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
+        // URLs
+        .replace(/https?:\/\/[^\s"'<>]+/gi, "[URL]")
+        // IPv4 addresses
+        .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[IP]")
+        // Common private-key block markers and contents
+        .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/gi, "[REDACTED_PRIVATE_KEY]")
+        .slice(0, 500);
 }
 
 
-// ==================================
-// SANITIZE CORRELATIONS
-// ==================================
+function sanitizeFindings(findings) {
+    if (!Array.isArray(findings)) return [];
+
+    return findings.slice(0, 100).map(finding => ({
+        category: sanitizeReason(
+            typeof finding?.category === "string"
+                ? finding.category
+                : "UNKNOWN"
+        ).slice(0, 80),
+
+        type: sanitizeReason(
+            typeof finding?.type === "string"
+                ? finding.type
+                : "UNKNOWN"
+        ).slice(0, 80),
+
+        severity: safeEnum(
+            finding?.severity,
+            ALLOWED_SEVERITIES,
+            "LOW"
+        ),
+
+        reason: sanitizeReason(finding?.reason)
+    }));
+}
 
 function sanitizeCorrelations(correlations) {
+    if (!Array.isArray(correlations)) return [];
 
-    return (correlations || [])
-
-        .map((correlation) =>
-            sanitizeReason(correlation)
-        )
-
-        .filter(
-            (correlation) =>
-                correlation.length > 0
-        );
-
+    return correlations
+        .slice(0, 30)
+        .filter(item => typeof item === "string")
+        .map(sanitizeReason);
 }
-
-
-// ==================================
-// BUILD AI SECURITY PAYLOAD
-// ==================================
 
 function buildAISecurityPayload(scan) {
-
-    if (!scan) {
-
-        return {
-
-            overallRisk: "SAFE",
-
-            websiteRisk: "SAFE",
-
-            extensionRisk: "SAFE",
-
-            findings: [],
-
-            correlations: []
-
-        };
-
-    }
-
-
-    // ==================================
-    // Collect ONLY security findings
-    // ==================================
+    const source = scan || {};
 
     const findings = [
-
-        ...(scan.urlFindings || []),
-
-        ...(scan.domFindings || []),
-
-        ...(scan.formFindings || []),
-
-        ...(scan.scriptIframeFindings || []),
-
-        ...(scan.sensitiveDataFindings || []),
-
-        ...(scan.promptInjectionFindings || [])
-
+        ...(Array.isArray(source.urlFindings)
+            ? source.urlFindings : []),
+        ...(Array.isArray(source.domFindings)
+            ? source.domFindings : []),
+        ...(Array.isArray(source.formFindings)
+            ? source.formFindings : []),
+        ...(Array.isArray(source.scriptIframeFindings)
+            ? source.scriptIframeFindings : []),
+        ...(Array.isArray(source.sensitiveDataFindings)
+            ? source.sensitiveDataFindings : []),
+        ...(Array.isArray(source.promptInjectionFindings)
+            ? source.promptInjectionFindings : [])
     ];
 
+    const extensions = Array.isArray(source.extensionScan)
+        ? source.extensionScan
+        : [];
 
-    const sanitizedFindings =
-        sanitizeFindings(findings);
+    let extensionRisk = "LOW";
 
+    if (extensions.some(e => e?.risk === "CRITICAL")) {
+        extensionRisk = "CRITICAL";
+    } else if (extensions.some(e => e?.risk === "HIGH")) {
+        extensionRisk = "HIGH";
+    } else if (extensions.some(e => e?.risk === "MEDIUM")) {
+        extensionRisk = "MEDIUM";
+    }
 
-    const correlations =
-        scan.risk?.reasons || [];
-
-
-    const sanitizedCorrelations =
-        sanitizeCorrelations(correlations);
-
-
-    // ==================================
-    // AI-SAFE PAYLOAD
-    // ==================================
+    const websiteRisk = safeEnum(
+        source.risk?.level || source.overallRisk,
+        ALLOWED_RISKS,
+        "SAFE"
+    );
 
     return {
+        overallRisk: safeEnum(
+            source.overallRisk || websiteRisk,
+            ALLOWED_RISKS,
+            "SAFE"
+        ),
 
-        overallRisk:
-            scan.overallRisk ||
-            scan.risk?.level ||
-            "SAFE",
+        websiteRisk,
+        extensionRisk,
 
-        websiteRisk:
-            scan.risk?.level ||
-            "SAFE",
+        findings: sanitizeFindings(findings),
 
-        extensionRisk:
-
-            scan.extensionScan?.some(
-                (extension) =>
-                    extension.risk === "HIGH"
-            )
-
-                ? "HIGH"
-
-                : scan.extensionScan?.some(
-                    (extension) =>
-                        extension.risk === "MEDIUM"
-                )
-
-                    ? "MEDIUM"
-
-                    : "LOW",
-
-        findings:
-            sanitizedFindings,
-
-        correlations:
-            sanitizedCorrelations
-
+        correlations: sanitizeCorrelations(
+            source.risk?.reasons
+        )
     };
-
 }
-
