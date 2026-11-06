@@ -1,7 +1,7 @@
 {
-  "name": "sentinelai-backend",
+  "name": "threatlens-backend",
   "version": "1.0.0",
-  "description": "Secure AI backend for SentinelAI",
+  "description": "Secure AI backend for ThreatLens - Ocular Web Security",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

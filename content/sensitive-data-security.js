@@ -1,5 +1,5 @@
     console.log(
-        "SentinelAI Sensitive Data Security Engine loaded"
+        "ThreatLens Sensitive Data Security Engine loaded"
     );
 
 

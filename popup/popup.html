@@ -1,181 +1,76 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-
     <meta charset="UTF-8">
-
-    <title>SentinelAI</title>
-
-    <link
-        rel="stylesheet"
-        href="popup.css"
-    >
-
+    <title>ThreatLens • Ocular Security</title>
+    <link rel="stylesheet" href="popup.css">
 </head>
-
 
 <body>
 
     <!-- Header -->
-
     <div class="header">
-
         <div class="logo-section">
-
             <div class="logo">
-                🛡
+                <img src="../icons/icon32.png" alt="Sharingan Eye" class="sharingan-icon-spin">
             </div>
-
             <div>
-                <h1>SentinelAI</h1>
-                <span class="subtitle">
-                    Browser Security
-                </span>
+                <h1>ThreatLens</h1>
+                <span class="subtitle">OCULAR WEB SECURITY</span>
             </div>
-
         </div>
 
         <div class="protection-status">
-            ● ON
+            <span class="status-pulse-dot"></span> ACTIVE
         </div>
-
     </div>
-
 
     <!-- Current URL -->
-
     <div class="url-section">
-
-        <span class="label">
-            Current Website
-        </span>
-
-        <div
-            id="currentUrl"
-            class="url"
-        >
-            Loading...
-        </div>
-
+        <span class="label">CURRENT WEBSITE TARGET</span>
+        <div id="currentUrl" class="url">Loading...</div>
     </div>
 
-
-    <!-- Risk -->
-
-    <div
-        id="riskBox"
-        class="risk-box"
-    >
-
-        <div
-            id="riskIcon"
-            class="risk-icon"
-        >
-            🟢
-        </div>
-
+    <!-- Security Status -->
+    <div id="riskBox" class="risk-box">
+        <div id="riskIcon" class="risk-icon">🟢</div>
         <div>
-
-            <div class="label">
-                Security Status
-            </div>
-
-            <div
-                id="riskLevel"
-                class="risk-level"
-            >
-                LOW RISK
-            </div>
-
+            <div class="label">THREAT PERCEPTION</div>
+            <div id="riskLevel" class="risk-level">SAFE</div>
         </div>
-
     </div>
 
-
-    <!-- Findings -->
-
+    <!-- Threat Indicators -->
     <div class="findings">
-
         <div class="finding-row">
-
-            <span>
-                Website Findings
-            </span>
-
-            <strong id="websiteFindings">
-                0
-            </strong>
-
+            <span>Website Threat Indicators</span>
+            <strong id="websiteFindings">0</strong>
         </div>
-
-
         <div class="finding-row">
-
-            <span>
-                Extension Findings
-            </span>
-
-            <strong id="extensionFindings">
-                0
-            </strong>
-
+            <span>Extension Findings</span>
+            <strong id="extensionFindings">0</strong>
         </div>
-
     </div>
 
-
-    <!-- AI & Privacy -->
-
+    <!-- Protection Engine Status -->
     <div class="settings-info">
-
         <div class="info-row">
-
-            <span>
-                AI Analysis
-            </span>
-
-            <span
-                id="aiStatus"
-                class="enabled"
-            >
-                ON
-            </span>
-
+            <span>AI Neural Analysis</span>
+            <span id="aiStatus" class="enabled">ON</span>
         </div>
-
-
         <div class="info-row">
-
-            <span>
-                Privacy Mode
-            </span>
-
-            <span
-                id="privacyStatus"
-                class="disabled"
-            >
-                OFF
-            </span>
-
+            <span>Yata Shield (Privacy Mode)</span>
+            <span id="privacyStatus" class="enabled">ON</span>
         </div>
-
     </div>
 
-
-    <!-- Buttons -->
-
+    <!-- Actions -->
     <div class="actions">
-
-        <button
-            id="detailsBtn"
-            class="primary-btn"
-        >
-            View Details
+        <button id="detailsBtn" class="primary-btn">
+            <span>Open Investigation Terminal</span> <span class="arrow">&rarr;</span>
         </button>
-
     </div>
-
 
     <script src="popup.js"></script>
 

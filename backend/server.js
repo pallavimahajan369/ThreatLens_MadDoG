@@ -1,3 +1,5 @@
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 require("dotenv").config();
 
 const express = require("express");
@@ -7,6 +9,17 @@ const app = express();
 
 const PORT =
     process.env.PORT || 3000;
+
+// CORS Middleware (For Chrome Extensions & Dashboard)
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(200);
+    }
+    next();
+});
 
 app.use(
     express.json({
@@ -35,7 +48,7 @@ app.get(
         res.json({
             status: "ok",
             service:
-                "SentinelAI AI Backend"
+                "ThreatLens AI Backend"
         });
 
     }
@@ -101,10 +114,10 @@ app.post(
             // -------------------------------
 
             const systemInstruction = `
-You are the AI analysis component of SentinelAI,
+You are the AI analysis component of ThreatLens,
 a browser security extension.
 
-The local SentinelAI security engine is authoritative
+The local ThreatLens security engine is authoritative
 for security detection and risk classification.
 
 Your job is ONLY to:
@@ -152,36 +165,43 @@ Return ONLY valid JSON using exactly this structure:
             // Send sanitized security data
             // -------------------------------
 
-            const response =
-                await ai.models.generateContent({
+            const candidateModels = [
+                "gemini-3.5-flash-lite",
+                "gemini-2.5-flash-lite",
+                "gemini-2.0-flash",
+                "gemini-1.5-flash"
+            ];
 
-                    model:
-                        "gemini-3.5-flash-lite",
+            let aiText = null;
+            let lastModelError = null;
 
-                    contents:
-                        JSON.stringify(
-                            payload
-                        ),
+            for (const modelName of candidateModels) {
+                try {
+                    const resp = await ai.models.generateContent({
+                        model: modelName,
+                        contents: JSON.stringify(payload),
+                        config: {
+                            systemInstruction: systemInstruction,
+                            responseMimeType: "application/json"
+                        }
+                    });
 
-                    config: {
-
-                        systemInstruction:
-                            systemInstruction,
-
-                        responseMimeType:
-                            "application/json"
-
+                    if (resp && resp.text) {
+                        aiText = resp.text;
+                        break;
                     }
+                } catch (e) {
+                    lastModelError = e;
+                    console.warn(`Model ${modelName} unavailable, trying fallback: ${e.message}`);
+                }
+            }
 
+            if (!aiText) {
+                console.error("All AI models failed:", lastModelError?.message);
+                return res.status(502).json({
+                    error: "AI analysis unavailable: " + (lastModelError?.message || "All models failed")
                 });
-
-
-            // -------------------------------
-            // Parse AI response
-            // -------------------------------
-
-            const aiText =
-                response.text;
+            }
 
 
             let aiResult;
@@ -255,13 +275,15 @@ Return ONLY valid JSON using exactly this structure:
 // Start Server
 // ===============================
 
-app.listen(
-    PORT,
-    () => {
-
-        console.log(
-            `SentinelAI backend running on port ${PORT}`
-        );
-
+app.listen(PORT, () => {
+    console.log("\n========================================");
+    console.log("🛡️ ThreatLens AI Backend Running");
+    console.log("📍 Port: " + PORT);
+    console.log("🔗 Health: http://localhost:" + PORT + "/health");
+    if (process.env.GEMINI_API_KEY) {
+        console.log("🔑 Gemini API Key: ACTIVE (length: " + process.env.GEMINI_API_KEY.length + ")");
+    } else {
+        console.warn("⚠️ Gemini API Key: MISSING in backend/.env!");
     }
-);
+    console.log("========================================\n");
+});

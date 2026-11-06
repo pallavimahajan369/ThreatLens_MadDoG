@@ -2,122 +2,78 @@
 <html lang="en">
 
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>SentinelAI Dashboard</title>
-
+    <title>ThreatLens Dashboard • Ocular Web Security</title>
     <link rel="stylesheet" href="dashboard.css">
-
 </head>
 
 <body>
 
-    <!-- HEADER -->
-
+    <!-- HEADER (UCHIHA SHADOW SENTINEL) -->
     <header class="header">
-
-        <div>
-            <h1>🛡 SentinelAI</h1>
-            <p>Security Investigation Dashboard</p>
+        <div class="header-branding">
+            <div class="header-logo-container">
+                <img src="../icons/icon48.png" alt="Sharingan Eye" class="header-sharingan-icon">
+            </div>
+            <div>
+                <div class="header-title-badge">
+                    <h1>ThreatLens</h1>
+                    <span class="shinobi-badge">OCULAR WEB SECURITY</span>
+                </div>
+                <p>Ocular Threat Investigation & Deep Code Inspector</p>
+            </div>
         </div>
 
         <div class="protection">
-            ● Protection ON
+            <span class="protection-pulse-dot"></span> SHARINGAN ACTIVE
         </div>
-
     </header>
 
 
     <main>
 
-
         <!-- ========================= -->
-        <!-- OVERVIEW -->
+        <!-- OVERVIEW                  -->
         <!-- ========================= -->
-
         <section>
-
             <h2>Overview</h2>
-
             <div class="overview-grid">
-
                 <div class="card">
-
                     <span>Overall Risk</span>
-
-                    <strong id="overallRisk">
-                        LOW
-                    </strong>
-
+                    <strong id="overallRisk">LOW</strong>
                 </div>
 
-
                 <div class="card">
-
                     <span>Website Security</span>
-
-                    <strong id="websiteRisk">
-                        LOW
-                    </strong>
-
+                    <strong id="websiteRisk">LOW</strong>
                 </div>
 
-
                 <div class="card">
-
                     <span>Extension Security</span>
-
-                    <strong id="extensionRisk">
-                        LOW
-                    </strong>
-
+                    <strong id="extensionRisk">LOW</strong>
                 </div>
-
 
                 <div class="card">
-
                     <span>Privacy Status</span>
-
-                    <strong id="privacyStatusOverview">
-                        ON
-                    </strong>
-
+                    <strong id="privacyStatusOverview">ON</strong>
                 </div>
-
             </div>
-
         </section>
 
 
-
         <!-- ========================= -->
-        <!-- WEBSITE SECURITY -->
+        <!-- WEBSITE SECURITY          -->
         <!-- ========================= -->
-
         <section>
-
             <h2>Website Security</h2>
-
             <div class="website-card">
-
                 <div class="url">
-
                     <span>URL</span>
-
-                    <strong id="websiteUrl">
-                        Loading...
-                    </strong>
-
+                    <strong id="websiteUrl">Loading...</strong>
                 </div>
 
-                
-
-
                 <div class="security-grid">
-
                     <div>
                         <span>DOM</span>
                         <strong id="domStatus">-</strong>
@@ -140,7 +96,7 @@
 
                     <div>
                         <span>Phishing</span>
-                        <strong id="phishingStatus">Not analyzed </strong>
+                        <strong id="phishingStatus">Not analyzed</strong>
                     </div>
 
                     <div>
@@ -152,225 +108,313 @@
                         <span>URL Findings</span>
                         <strong id="urlFindings">0</strong>
                     </div>
-
                 </div>
 
                 <div class="findings-list">
-
                     <h3>Security Findings</h3>
-
                     <div id="findingsContainer">
                         No findings
                     </div>
-
                 </div>
-
             </div>
-
         </section>
 
 
-
         <!-- ========================= -->
-        <!-- EXTENSION SECURITY -->
+        <!-- EXTENSION SECURITY        -->
         <!-- ========================= -->
-
         <section>
-
             <h2>Extension Security</h2>
-
             <div class="extension-card">
-
                 <div class="extension-row">
-
                     <span>Installed Extensions</span>
-
-                    <strong id="extensionCount">
-                        0
-                    </strong>
-
+                    <strong id="extensionCount">0</strong>
                 </div>
 
-
                 <div class="extension-row">
-
                     <span>Permissions</span>
-
-                    <strong id="permissionCount">
-                        0
-                    </strong>
-
+                    <strong id="permissionCount">0</strong>
                 </div>
 
-
                 <div class="extension-row">
-
                     <span>Risk</span>
-
-                    <strong id="extensionRiskDetail">
-                        LOW
-                    </strong>
-
+                    <strong id="extensionRiskDetail">LOW</strong>
                 </div>
-
 
                 <div class="extension-row">
-
                     <span>Findings</span>
-
-                    <strong id="extensionFindings">
-                        0
-                    </strong>
-
+                    <strong id="extensionFindings">0</strong>
                 </div>
-
             </div>
 
             <div class="extension-findings-section">
-
                 <h3>Extension Findings</h3>
-
                 <div id="extensionFindingsContainer">
                     <p>No extension findings available.</p>
                 </div>
-
-            </div>          
-           
-
+            </div>
         </section>
 
 
-
         <!-- ========================= -->
-        <!-- AI ANALYSIS -->
+        <!-- AI NEURAL ANALYSIS        -->
         <!-- ========================= -->
+        <section class="ai-section">
+            <div class="ai-section-header">
+                <h2>AI Neural Analysis</h2>
+                <button id="triggerAiBtn" class="ai-trigger-btn" type="button" title="Request immediate AI analysis for this scan">
+                    <span class="btn-icon">✦</span> Analyze with AI
+                </button>
+            </div>
 
-        <section>
-
-            <h2>AI Analysis</h2>
+            <!-- Notice Banner when Key is not set -->
+            <div id="aiPromptBanner" class="ai-prompt-banner hidden">
+                <div class="banner-left">
+                    <span class="banner-icon">🔑</span>
+                    <span id="aiPromptBannerText">Gemini API Key required to generate AI explanations. Add your free key in Settings below.</span>
+                </div>
+                <button id="scrollToSettingsBtn" class="banner-link-btn" type="button">Configure in Settings &darr;</button>
+            </div>
 
             <div class="ai-card">
-
-                <!-- AI SUMMARY -->
-
-                <div>
-
-                    <h3>Summary</h3>
-
-                    <p id="aiSummary">
-                        AI analysis will appear here.
-                    </p>
-
+                <!-- 1. EXECUTIVE SUMMARY -->
+                <div class="ai-block">
+                    <h3>Executive Threat Summary</h3>
+                    <p id="aiSummary">AI analysis will appear here.</p>
                 </div>
 
-
-                <!-- WHY -->
-
-                <div>
-
-                    <h3>Why suspicious?</h3>
-
-                    <div id="aiWhy">
-                        AI explanation will appear here.
+                <!-- 2. LAYMAN EXPLANATION & WHAT THIS MEANS FOR YOU -->
+                <div id="aiLaymanSection" class="ai-block layman-block">
+                    <div class="layman-header">
+                        <span class="layman-icon">💡</span>
+                        <h3>What Does This Mean For You? (Plain-Language Explanation)</h3>
                     </div>
+                    <p id="aiLaymanExplanation" class="layman-text">A simple breakdown of how these security findings affect you in everyday life will appear here after analysis.</p>
 
-                </div>
-
-
-                <!-- RECOMMENDATIONS -->
-
-                <div>
-
-                    <h3>Recommended Actions</h3>
-
-                    <div id="aiRecommendations">
-                        AI recommendations will appear here.
+                    <!-- DATA AT RISK TAGS -->
+                    <div id="aiDataAtRiskWrapper" class="data-at-risk-wrapper" style="display: none;">
+                        <span class="risk-pill-label">Potential Exposure:</span>
+                        <div id="aiDataAtRiskContainer" class="risk-pills-container">
+                            <!-- Populated with badges e.g. Passwords, Cookies, Session -->
+                        </div>
                     </div>
-
                 </div>
 
-
-                <!-- USER MESSAGE -->
-
-                <div>
-
-                    <h3>Security Message</h3>
-
-                    <p id="aiUserMessage">
-                        Continue browsing normally.
-                    </p>
-
+                <!-- 3. EXACT VULNERABILITY LOCATIONS -->
+                <div id="aiLocationsSection" class="ai-block locations-block" style="display: none;">
+                    <div class="block-header">
+                        <span class="block-icon">📍</span>
+                        <h3>Exact Vulnerability Locations</h3>
+                    </div>
+                    <div id="aiLocationsContainer" class="locations-grid">
+                        <!-- Populated dynamically with location cards -->
+                    </div>
                 </div>
 
+                <!-- 4. STEP-BY-STEP REMEDIATION GUIDE -->
+                <div id="aiSolutionsSection" class="ai-block solutions-block">
+                    <div class="solutions-grid">
+                        <!-- User Action Steps -->
+                        <div class="solution-column user-solution">
+                            <div class="solution-header">
+                                <span class="sol-badge badge-user">👤 FOR YOU (User Action Guide)</span>
+                                <h4>How to Resolve (Actionable Steps for You)</h4>
+                            </div>
+                            <div id="aiUserStepsList" class="steps-list">
+                                <div class="step-item">• Follow on-demand security guidance here after scan.</div>
+                            </div>
+                        </div>
+
+                        <!-- Developer Code Fix -->
+                        <div class="solution-column dev-solution">
+                            <div class="solution-header">
+                                <span class="sol-badge badge-dev">💻 FOR DEVELOPERS (Code Fix)</span>
+                                <h4 id="aiDevFixTitle">How to Secure (Developer Code Fix)</h4>
+                            </div>
+                            <div id="aiDevStepsList" class="steps-list">
+                                <div class="step-item">• Technical remediation code will appear here.</div>
+                            </div>
+                            <div id="aiDevCodeWrapper" class="dev-code-box" style="display: none;">
+                                <div class="code-box-header">
+                                    <span>🛠️ Recommended Secure Code</span>
+                                    <button type="button" id="copyAiCodeBtn" class="copy-code-btn">📋 Copy Code</button>
+                                </div>
+                                <pre><code id="aiDevCodeSnippet"></code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden fallback containers for backward compatibility -->
+                <div id="aiWhy" style="display: none;"></div>
+                <div id="aiRecommendations" style="display: none;"></div>
+
+                <!-- 5. VERDICT -->
+                <div class="ai-block verdict-block">
+                    <h3>Security Verdict</h3>
+                    <p id="aiUserMessage">Protected by ThreatLens local ocular engine. Zero cloud exposure.</p>
+                </div>
             </div>
-
         </section>
 
 
-       
-        <!-- SETTINGS -->
+        <!-- ========================= -->
+        <!-- SETTINGS & CONTROLS        -->
+        <!-- ========================= -->
         <section class="settings-section">
-
-            <h2>Settings</h2>
-
-            <div class="settings-panel">
-
-                <!-- AI SETTINGS -->
-                <div class="ai-setting-card">
-
-                    <div class="ai-setting-icon">✦</div>
-
-                    <div class="ai-setting-info">
-                        <h3>AI Analysis</h3>
-                        <p>Enable AI-powered security insights</p>
-                        <span class="ai-privacy-note">🛡️ Sensitive data is sanitized before AI analysis</span>
-                    </div>
-
-                    <div class="ai-setting-control">
-                        <label class="ai-switch" for="aiAnalysisToggle">
-                            <input type="checkbox" id="aiAnalysisToggle">
-                            <span class="ai-slider"></span>
-                        </label>
-
-                        <strong id="aiAnalysisStatus" class="disabled">OFF</strong>
-                    </div>
-
-                </div>
-
-                <!-- PRIVACY MODE -->
-                <div class="setting-row">
-                    <div class="setting-info">
-                        <span>🔒 Privacy Mode</span>
-                        <small>Always enabled</small>
-                    </div>
-                    <strong id="privacyStatusSettings" class="enabled">ON</strong>
-                </div>
-
-                <!-- SCAN SETTINGS -->
-                <div class="setting-row">
-                    <div class="setting-info">
-                        <span>🔍 Scan Settings</span>
-                        <small>Website checks run automatically</small>
-                    </div>
-                    <strong>Automatic</strong>
-                </div>
-
-                <!-- LOCAL SCANNING -->
-                <div class="setting-row">
-                    <div class="setting-info">
-                        <span>💻 Local Scanning</span>
-                        <small>Local security checks remain available</small>
-                    </div>
-                    <strong id="localOnlyStatus" class="enabled">ON</strong>
-                </div>
-
+            <div class="settings-header">
+                <h2>Settings & Protection Controls</h2>
+                <p class="settings-subtitle">Manage automated scanning, AI neural intelligence, and privacy enforcement</p>
             </div>
 
+            <div class="settings-container">
+                <!-- 1. CORE PROTECTION MATRIX (3-CARD GRID) -->
+                <div class="settings-grid-cards">
+                    <!-- PRIVACY MODE -->
+                    <div class="settings-card config-card">
+                        <div class="config-card-header">
+                            <div class="config-icon-box icon-privacy">🔒</div>
+                            <strong id="privacyStatusSettings" class="status-pill enabled">ON</strong>
+                        </div>
+                        <h4>Privacy Mode</h4>
+                        <p>Strict local sandbox. Web browsing history and inspection data are never uploaded or retained.</p>
+                        <div class="config-footer-tag">Always Active</div>
+                    </div>
+
+                    <!-- SCAN SETTINGS -->
+                    <div class="settings-card config-card">
+                        <div class="config-card-header">
+                            <div class="config-icon-box icon-scan">🔍</div>
+                            <strong class="status-pill auto">AUTOMATIC</strong>
+                        </div>
+                        <h4>Website Scanning</h4>
+                        <p>DOM elements, interactive forms, and script sources are analyzed dynamically on page load.</p>
+                        <div class="config-footer-tag">Real-Time Hook</div>
+                    </div>
+
+                    <!-- LOCAL SCANNING -->
+                    <div class="settings-card config-card">
+                        <div class="config-card-header">
+                            <div class="config-icon-box icon-local">💻</div>
+                            <strong id="localOnlyStatus" class="status-pill enabled">ON</strong>
+                        </div>
+                        <h4>Local Engine</h4>
+                        <p>Security rules and heuristic threat analysis execute strictly inside your browser environment.</p>
+                        <div class="config-footer-tag">Offline Capable</div>
+                    </div>
+                </div>
+
+                <!-- 2. GEMINI AI NEURAL ENGINE (BYOK - PRIVATE KEY) -->
+                <div id="aiKeySection" class="settings-card ai-config-card">
+                    <div class="ai-config-header">
+                        <div class="config-icon-box icon-cloud">✦</div>
+                        <div class="ai-config-title">
+                            <div class="ai-config-title-row">
+                                <h4>Gemini AI Neural Engine</h4>
+                                <span id="aiKeyBadge" class="status-pill disabled">NOT CONFIGURED</span>
+                            </div>
+                            <p>Private Client-Side Intelligence. Your Gemini key stays strictly on your machine — zero servers, zero exposure.</p>
+                        </div>
+                    </div>
+
+                    <div class="ai-config-form">
+                        <div class="config-form-group">
+                            <label for="geminiApiKeyInput">Personal Google Gemini API Key</label>
+                            <div class="input-with-eye">
+                                <input type="password" id="geminiApiKeyInput" placeholder="Paste your free key: AIzaSy..." spellcheck="false" autocomplete="off">
+                                <button type="button" id="toggleKeyVisibilityBtn" class="eye-toggle-btn" title="Show / Hide Key">👁️</button>
+                            </div>
+                            <span class="field-hint">
+                                Get a free key in 30 seconds from 
+                                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style="color: #ef4444; text-decoration: underline; font-weight: 700;">Google AI Studio</a>. 
+                                🔒 Saved 100% locally in your encrypted browser storage.
+                            </span>
+                        </div>
+
+                        <div class="config-form-actions">
+                            <button id="saveAiConfigBtn" class="settings-btn-save" type="button">Save Key</button>
+                            <button id="removeAiConfigBtn" class="settings-btn-remove" type="button">Remove Key</button>
+                            <button id="testAiConnectionBtn" class="settings-btn-test" type="button">⚡ Test Key</button>
+                            <span id="aiConnectionStatusMsg" class="connection-status-msg hidden"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </section>
-
-
 
     </main>
+
+
+    <!-- ========================================= -->
+    <!-- FINDING DETAILS MODAL POPUP               -->
+    <!-- ========================================= -->
+    <div id="findingDetailModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-header-left">
+                    <span id="modalSeverityBadge" class="modal-badge badge-medium">MEDIUM</span>
+                    <h3 id="modalTitle">Security Finding Details</h3>
+                </div>
+                <button id="modalCloseBtn" class="modal-close-btn" type="button" aria-label="Close dialog">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Meta Information Strip -->
+                <div class="modal-meta-strip">
+                    <div class="meta-item">
+                        <span class="meta-label">Category</span>
+                        <strong id="modalCategory">DOM</strong>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Website URL</span>
+                        <strong id="modalUrl" class="meta-url" title="">—</strong>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Instances Found</span>
+                        <strong id="modalItemsCount">0</strong>
+                    </div>
+                </div>
+
+                <!-- Detected Instances Section -->
+                <div id="modalItemsSection" class="modal-section">
+                    <h4 class="section-title">
+                        <span class="section-icon">📍</span>
+                        <span>Detected Occurrences & Code Locations</span>
+                    </h4>
+                    <p class="section-subtitle">Specific DOM elements, inline scripts, or code locations flagged during the scan:</p>
+                    <div id="modalItemsContainer" class="modal-items-container">
+                        <!-- Dynamically populated with individual instance cards -->
+                    </div>
+                </div>
+
+                <!-- Threat / Risk Explanation Section -->
+                <div class="modal-section">
+                    <h4 class="section-title">
+                        <span class="section-icon">⚠️</span>
+                        <span>Security Risk & Threat Analysis</span>
+                    </h4>
+                    <div id="modalRiskExplanation" class="modal-box risk-box">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Solution / Remediation Section -->
+                <div class="modal-section">
+                    <h4 class="section-title">
+                        <span class="section-icon">🛡️</span>
+                        <span>How to Resolve & Protect</span>
+                    </h4>
+                    <div id="modalSolutionText" class="modal-box solution-box">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button id="modalCloseFooterBtn" class="modal-btn-secondary" type="button">Close Details</button>
+            </div>
+        </div>
+    </div>
 
 
     <script src="dashboard.js"></script>

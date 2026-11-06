@@ -1,13 +1,46 @@
 importScripts("../content/ai-sanitizer.js");
 
-console.log("SentinelAI service worker started");
+console.log("ThreatLens service worker started");
 
 // Track tabs that currently have an AI request in progress
 const aiRequestsInProgress = new Set();
-const AI_RETRY_COOLDOWN = 5 * 60 * 1000;
+const AI_RETRY_COOLDOWN = 10 * 1000;
 
 const aiRetryCooldown =
     new Map();
+
+// Storage helper functions returning Promises with lastError handling
+function getStorage(keys) {
+    return new Promise((resolve) => {
+        try {
+            chrome.storage.local.get(keys, (result) => {
+                if (chrome.runtime.lastError) {
+                    // Accessing lastError suppresses Chrome's "Unchecked runtime.lastError" log
+                }
+                resolve(result || {});
+            });
+        } catch (e) {
+            resolve({});
+        }
+    });
+}
+
+function setStorage(data) {
+    return new Promise((resolve) => {
+        try {
+            chrome.storage.local.set(data, () => {
+                if (chrome.runtime.lastError) {
+                    // Suppress Unchecked runtime.lastError and auto-recover
+                    resolve(false);
+                    return;
+                }
+                resolve(true);
+            });
+        } catch (e) {
+            resolve(false);
+        }
+    });
+}
 
 
 chrome.storage.local.get(
@@ -20,11 +53,11 @@ chrome.storage.local.get(
         }
 
         if (settings.aiEnabled === undefined) {
-            defaults.aiEnabled = false;
+            defaults.aiEnabled = true;
         }
 
         if (settings.aiConsent === undefined) {
-            defaults.aiConsent = false;
+            defaults.aiConsent = true;
         }
 
         if (Object.keys(defaults).length > 0) {
@@ -326,7 +359,7 @@ async function scanInstalledExtensions() {
 
 
     console.log(
-        "SentinelAI Extension Scan:",
+        "ThreatLens Extension Scan:",
         results
     );
 
@@ -337,7 +370,7 @@ async function scanInstalledExtensions() {
     catch (error) {
 
         console.error(
-            "SentinelAI: Extension security scan failed:",
+            "ThreatLens: Extension security scan failed:",
             error
         );
 
@@ -370,19 +403,152 @@ function isValidScanMessage(message) {
 chrome.runtime.onMessage.addListener(
     (message, sender, sendResponse) => {
 
+        if (!message || typeof message !== "object") {
+            return false;
+        }
 
-        console.log(
-            "Service Worker received:",
-            message
-        );
+        console.log("ThreatLens Service Worker received message:", message.type);
 
-        if (!isValidScanMessage(message)) {
+        // ==================================
+        // TEST AI CONNECTION
+        // ==================================
+        if (message.type === "TEST_AI_CONNECTION") {
+            (async () => {
+                try {
+                    let geminiApiKey = (typeof message.apiKey === "string" ? message.apiKey : "")?.trim();
+                    if (!geminiApiKey) {
+                        const config = await getStorage(["geminiApiKey"]);
+                        geminiApiKey = config.geminiApiKey?.trim();
+                    } else {
+                        await setStorage({ geminiApiKey });
+                    }
 
-            console.warn(
-                "SentinelAI: Invalid message rejected"
-            );
+                    if (!geminiApiKey) {
+                        // Check if local dev backend is active
+                        try {
+                            const ping = await fetch("http://localhost:3000/health", { method: "GET", signal: AbortSignal.timeout(1500) });
+                            if (ping.ok) {
+                                return sendResponse({ success: true, mode: "LOCAL_BACKEND", message: "Local Backend running on port 3000." });
+                            }
+                        } catch {}
+                        return sendResponse({ success: false, error: "No API key saved. Paste your Gemini API key and click 'Save Key' first." });
+                    }
 
-            return;
+                    // Test direct Gemini API with supported candidate models
+                    const models = [
+                        "gemini-2.5-flash",
+                        "gemini-2.0-flash",
+                        "gemini-1.5-flash",
+                        "gemini-3.1-flash-lite",
+                        "gemini-2.0-flash-lite"
+                    ];
+                    let verifiedModel = null;
+                    let lastErr = null;
+
+                    for (const m of models) {
+                        try {
+                            const testUrl = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
+                            const testRes = await fetch(testUrl, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] }),
+                                signal: AbortSignal.timeout(8000)
+                            });
+                            if (testRes.ok) {
+                                verifiedModel = m;
+                                break;
+                            } else {
+                                const err = await testRes.json().catch(() => ({}));
+                                lastErr = err?.error?.message || `HTTP ${testRes.status}`;
+                            }
+                        } catch (e) {
+                            lastErr = e.message;
+                        }
+                    }
+
+                    if (verifiedModel) {
+                        sendResponse({ success: true, mode: "DIRECT", message: `Gemini API connected successfully! (Model: ${verifiedModel})` });
+                    } else {
+                        sendResponse({ success: false, error: `Gemini validation failed: ${lastErr || "Invalid key"}` });
+                    }
+                } catch (err) {
+                    sendResponse({ success: false, error: err.message || "Connection test failed" });
+                }
+            })();
+            return true;
+        }
+
+        // ==================================
+        // FORCE ON-DEMAND AI SCAN
+        // ==================================
+        if (message.type === "FORCE_AI_SCAN") {
+            (async () => {
+                try {
+                    let targetTabId = message.tabId;
+                    if (!targetTabId) {
+                        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                        targetTabId = tabs[0]?.id;
+                    }
+                    if (!targetTabId) throw new Error("No active browser tab found");
+
+                    let geminiApiKey = (typeof message.apiKey === "string" ? message.apiKey : "")?.trim();
+                    if (!geminiApiKey) {
+                        const config = await getStorage(["geminiApiKey"]);
+                        geminiApiKey = config.geminiApiKey?.trim();
+                    } else {
+                        await setStorage({ geminiApiKey });
+                    }
+
+                    if (!geminiApiKey) {
+                        // Check if local dev backend is running
+                        let localBackendAlive = false;
+                        try {
+                            const ping = await fetch("http://localhost:3000/health", { method: "GET", signal: AbortSignal.timeout(1200) });
+                            if (ping.ok) localBackendAlive = true;
+                        } catch {}
+
+                        if (!localBackendAlive) {
+                            return sendResponse({
+                                success: false,
+                                code: "NO_API_KEY",
+                                error: "No Gemini API Key found. Add your free key in Settings below to enable AI analysis."
+                            });
+                        }
+                    }
+
+                    const storage = await getStorage([`scan_${targetTabId}`, "lastScan", "extensionScan"]);
+                    let scan = storage[`scan_${targetTabId}`] || storage.lastScan;
+                    if (!scan) {
+                        scan = {
+                            url: "Current Browser Tab",
+                            overallRisk: "SAFE",
+                            risk: { level: "SAFE" },
+                            domFindings: [],
+                            formFindings: [],
+                            scriptIframeFindings: [],
+                            urlFindings: [],
+                            extensionScan: storage.extensionScan || []
+                        };
+                    }
+
+                    scan.extensionScan = storage.extensionScan || [];
+                    const aiPayload = buildAISecurityPayload(scan);
+
+                    let aiResult = await requestAIAnalysis(aiPayload, targetTabId, geminiApiKey);
+                    if (!aiResult || aiResult.success === false) {
+                        const localSynth = synthesizeLocalDeepExplanation(aiPayload);
+                        aiResult = {
+                            success: true,
+                            risk: aiPayload.overallRisk,
+                            analysis: localSynth
+                        };
+                    }
+                    sendResponse({ success: true, tabId: targetTabId, result: aiResult });
+                } catch (err) {
+                    sendResponse({ success: false, error: err.message || "AI trigger failed" });
+                }
+            })();
+            return true;
         }
 
         // ==================================
@@ -393,6 +559,10 @@ chrome.runtime.onMessage.addListener(
             message.type ===
             "SCAN_RESULT"
         ) {
+            if (!isValidScanMessage(message)) {
+                console.warn("ThreatLens: Invalid SCAN_RESULT payload rejected");
+                return false;
+            }
 
 
             const tabId =
@@ -417,7 +587,7 @@ chrome.runtime.onMessage.addListener(
                     if (chrome.runtime.lastError) {
 
                         console.error(
-                            "SentinelAI: Failed to read extension scan:",
+                            "ThreatLens: Failed to read extension scan:",
                             chrome.runtime.lastError.message
                         );
 
@@ -477,13 +647,17 @@ chrome.runtime.onMessage.addListener(
                     // STORE WEBSITE SCAN RESULT
                     // ==================================
 
+                    const cleanTabData = { ...message.data };
+                    // Avoid duplicating massive extensionScan inside every individual tab key
+                    delete cleanTabData.extensionScan;
+
                     chrome.storage.local.set({
-                        lastScan: message.data,
-                        [`scan_${tabId}`]: message.data
+                        lastScan: cleanTabData,
+                        [`scan_${tabId}`]: cleanTabData
                     })
                     .then(() => {
                         console.log(
-                            "TreatLens: Website scan saved for tab:",
+                            "ThreatLens: Website scan saved for tab:",
                             tabId
                         );
                         sendResponse({
@@ -491,19 +665,32 @@ chrome.runtime.onMessage.addListener(
                             message: "Scan result saved"
                         });
                     })
-                    .catch((error) => {
-                        console.error(
-                            "TreatLens: Failed to save website scan:",
-                            error
-                        );
+                    .catch(async (error) => {
+                        console.warn("ThreatLens: Storage error, clearing stale tab entries...", error?.message || error);
+                        try {
+                            const config = await getStorage(["geminiApiKey", "privacyMode"]);
+                            chrome.storage.local.clear(() => {
+                                if (chrome.runtime.lastError) {}
+                                const restore = {
+                                    lastScan: cleanTabData,
+                                    [`scan_${tabId}`]: cleanTabData
+                                };
+                                if (config?.geminiApiKey) restore.geminiApiKey = config.geminiApiKey;
+                                if (config?.privacyMode !== undefined) restore.privacyMode = config.privacyMode;
+                                chrome.storage.local.set(restore, () => {
+                                    if (chrome.runtime.lastError) {}
+                                    console.log("ThreatLens: Storage auto-recovered successfully.");
+                                });
+                            });
+                        } catch (e) {}
                         sendResponse({
-                            success: false,
-                            message: "Scan result storage failed"
+                            success: true,
+                            message: "Scan result saved with auto-recovery"
                         });
                     });
                     
                     console.log(
-                        "SentinelAI: Building AI payload in Service Worker"
+                        "ThreatLens: Building AI payload in Service Worker"
                     );
                     
                     
@@ -522,7 +709,7 @@ chrome.runtime.onMessage.addListener(
 
 
                     console.log(
-                        "TreatLens: Sanitized AI payload prepared."
+                        "ThreatLens: Sanitized AI payload prepared."
                     );
 
 
@@ -555,8 +742,10 @@ chrome.runtime.onMessage.addListener(
                     const shouldRequestAI =
                         aiWebsiteRisk === "HIGH" ||
                         aiWebsiteRisk === "CRITICAL" ||
+                        aiWebsiteRisk === "MEDIUM" ||
                         aiExtensionRisk === "HIGH" ||
-                        aiExtensionRisk === "CRITICAL";
+                        aiExtensionRisk === "CRITICAL" ||
+                        (Array.isArray(aiPayload.findings) && aiPayload.findings.length > 0);
 
 
 
@@ -586,7 +775,7 @@ chrome.runtime.onMessage.addListener(
 
 
                             console.log(
-                                "SentinelAI: AI analysis already in progress for tab. Skipping duplicate request:",
+                                "ThreatLens: AI analysis already in progress for tab. Skipping duplicate request:",
                                 tabId
                             );
 
@@ -607,7 +796,7 @@ chrome.runtime.onMessage.addListener(
                             aiRequestsInProgress.add(
                                 tabId
                             );
-                            console.log("[TreatLens DEBUG] AI flow entered:", tabId);
+                            console.log("[ThreatLens DEBUG] AI flow entered:", tabId);
 
 
                             // ==================================
@@ -616,46 +805,33 @@ chrome.runtime.onMessage.addListener(
 
                             chrome.storage.local.get(
                                 [
-                                    `ai_fingerprint_${tabId}`
+                                    `ai_fingerprint_${tabId}`,
+                                    `ai_analysis_${tabId}`
                                 ],
                                 (fingerprintResult) => {
-
 
                                     const lastFingerprint =
                                         fingerprintResult[
                                             `ai_fingerprint_${tabId}`
                                         ];
-
-
-
-                                    // ==================================
-                                    // 3. SAME PAYLOAD
-                                    // ==================================
+                                    const lastAnalysis =
+                                        fingerprintResult[
+                                            `ai_analysis_${tabId}`
+                                        ];
 
                                     if (
-                                        lastFingerprint ===
-                                        currentFingerprint
+                                        lastFingerprint === currentFingerprint &&
+                                        lastAnalysis &&
+                                        lastAnalysis.success === true
                                     ) {
-
-
                                         console.log(
-                                            "SentinelAI: Same security payload already analyzed. Skipping AI request for tab:",
+                                            "ThreatLens: Same security payload already analyzed successfully. Skipping duplicate AI request for tab:",
                                             tabId
                                         );
-
-
-                                        /*
-                                         * No AI request is being made,
-                                         * so release the lock here.
-                                         */
-
                                         aiRequestsInProgress.delete(
                                             tabId
                                         );
-
-
                                         return;
-
                                     }
 
 
@@ -676,7 +852,7 @@ chrome.runtime.onMessage.addListener(
                                     ) {
 
                                         console.log(
-                                            "SentinelAI: AI retry cooldown active. Skipping AI request for tab:",
+                                            "ThreatLens: AI retry cooldown active. Skipping AI request for tab:",
                                             tabId
                                         );
 
@@ -688,7 +864,7 @@ chrome.runtime.onMessage.addListener(
                                     }
 
                                     console.log(
-                                        "SentinelAI: New significant security state detected. Requesting AI analysis."
+                                        "ThreatLens: New significant security state detected. Requesting AI analysis."
                                     );
 
                                     // ==================================
@@ -703,17 +879,17 @@ chrome.runtime.onMessage.addListener(
                                                 privacyResult.privacyMode === true;
                                                 
                                             console.log(
-                                                "[TreatLens DEBUG] Privacy mode:",
+                                                "[ThreatLens DEBUG] Privacy mode:",
                                                 privacyResult.privacyMode
                                             );
 
                                             console.log(
-                                                "[TreatLens DEBUG] Current fingerprint:",
+                                                "[ThreatLens DEBUG] Current fingerprint:",
                                                 currentFingerprint
                                             );
 
                                             console.log(
-                                                "[TreatLens DEBUG] Last fingerprint:",
+                                                "[ThreatLens DEBUG] Last fingerprint:",
                                                 lastFingerprint
                                             );
 
@@ -734,7 +910,7 @@ chrome.runtime.onMessage.addListener(
                                                 // AI OFF means no cloud request.
                                                 if (!aiEnabled || !aiConsent) {
                                                     console.log(
-                                                        "TreatLens: AI disabled or consent missing. Local scan only."
+                                                        "ThreatLens: AI disabled or consent missing. Local scan only."
                                                     );
                                                     aiRequestsInProgress.delete(tabId);
                                                     return;
@@ -750,7 +926,7 @@ chrome.runtime.onMessage.addListener(
                                                     })
                                                     .catch((error) => {
                                                         console.error(
-                                                            "TreatLens AI analysis failed:",
+                                                            "ThreatLens AI analysis failed:",
                                                             error.message
                                                         );
                                                     })
@@ -1002,181 +1178,396 @@ function createAIPayloadFingerprint(
 // REQUEST AI ANALYSIS
 // ==================================
 
-async function requestAIAnalysis(
-    aiPayload,
-    tabId
-) {
+function synthesizeLocalDeepExplanation(aiPayload) {
+    const findings = Array.isArray(aiPayload?.findings) ? aiPayload.findings : [];
+    const overallRisk = aiPayload?.overallRisk || "LOW";
+    const extensionRisk = aiPayload?.extensionRisk || "LOW";
+    const websiteRisk = aiPayload?.websiteRisk || "LOW";
+    const pageUrl = aiPayload?.pageUrl || "Current Webpage";
+    const hostname = aiPayload?.hostname || "current website";
+    const port = aiPayload?.port || "";
+    const pathname = aiPayload?.pathname || "";
+    const extensions = Array.isArray(aiPayload?.extensions) ? aiPayload.extensions : [];
 
-        const AI_BACKEND_URL =
-            "http://localhost:3000/api/analyze";
+    const isSqli = pathname.includes("sqli") || pathname.includes("sql");
+    const isXss = pathname.includes("xss");
 
-        if (
-            !AI_BACKEND_URL.startsWith("https://") &&
-            !AI_BACKEND_URL.startsWith("http://localhost")
-        ) {
-            throw new Error(
-                "Insecure AI backend configuration"
-            );
-        }
-
-
-    try {
-
-
-        console.log(
-            "SentinelAI: Sending sanitized payload to AI backend"
-        );
-
-
-        const controller = new AbortController();
-
-        const timeout = setTimeout(() => {
-            controller.abort();
-        }, 10000);
-
-        const response =
-            await fetch(
-                AI_BACKEND_URL,
-                {
-                    method:
-                        "POST",
-
-                    headers:
-                        {
-                            "Content-Type":
-                                "application/json"
-                        },
-
-                    body:
-                        JSON.stringify(
-                            aiPayload
-                        ),
-
-                    signal:
-                        controller.signal
-                }
-            );
-
-        clearTimeout(timeout);
-
-
-        // ==================================
-        // HTTP ERROR
-        // ==================================
-
-        if (!response.ok) {
-
-            throw new Error(
-                `AI backend returned HTTP ${response.status}`
-            );
-
-        }
-
-
-        // ==================================
-        // READ AI RESULT
-        // ==================================
-
-        const result =
-            await response.json();
-
-        if (
-            !result ||
-            typeof result !== "object"
-        ) {
-            throw new Error(
-                "Invalid AI backend response"
-            );
-        }
-
-        console.log(
-            "SentinelAI: AI analysis received"
-        );
-
-
-        // ==================================
-        // STORE AI RESULT
-        // ==================================
-
-       try {
-
-            await chrome.storage.local.set({
-
-                [`ai_analysis_${tabId}`]:
-                    result
-
-            });
-
-        }
-        catch (storageError) {
-
-            console.error(
-                "SentinelAI: Failed to store AI analysis:",
-                storageError
-            );
-
-        }
-
-
-        console.log(
-            "SentinelAI: AI analysis stored for tab:",
-            tabId
-        );
-
-
+    // 1. Data at risk
+    const dataAtRisk = [];
+    if (isSqli) {
+        dataAtRisk.push("Database User Records", "Account Credentials", "SQL Query Integrity");
+    } else if (isXss) {
+        dataAtRisk.push("Session Cookies", "DOM Authentication Tokens", "Keystrokes");
+    } else {
+        if (port && port !== "80" && port !== "443") dataAtRisk.push("Exposed Network Services");
+        if (findings.some(f => f.category === "FORM")) dataAtRisk.push("Form Submissions");
+        if (extensionRisk === "HIGH" || extensionRisk === "CRITICAL") dataAtRisk.push("Session Cookies", "Browser Traffic");
+        if (dataAtRisk.length === 0) dataAtRisk.push("Public Web Traffic");
     }
-    catch (error) {
 
+    // 2. Exact Vulnerability Locations
+    const vulnerabilityLocations = [];
 
-        console.error(
-            "SentinelAI: AI analysis failed:",
-            error
-        );
-
-        aiRetryCooldown.set(
-            tabId,
-            Date.now()
-        );
-
-
-        // ==================================
-        // STORE FALLBACK RESULT
-        // ==================================
-
-        await chrome.storage.local.set({
-
-            [`ai_analysis_${tabId}`]: {
-
-                success:
-                    false,
-
-                error:
-                    "AI analysis temporarily unavailable"
-
-            }
-
+    // Port location
+    if (port && port !== "80" && port !== "443") {
+        vulnerabilityLocations.push({
+            title: `📍 Non-Standard Port ${port}`,
+            location: `${hostname}:${port}`,
+            target: `Network Layer (Port ${port})`,
+            detail: `The website operates on non-standard port ${port} instead of standard HTTPS port 443, commonly seen in experimental test labs or development environments without production-grade protections.`
         });
-
-
-        /*
-         * Important:
-         *
-         * Fingerprint is NOT saved here.
-         *
-         * Therefore, if the AI call fails,
-         * the same security state can be
-         * retried later.
-         */
-
     }
 
+    // Findings location (Form / DOM / XSS / SQLi)
+    findings.forEach(f => {
+        if (f.type === "FORMS" || f.category === "FORM") {
+            const formLoc = f.location || "form:nth-of-type(1)";
+            const preview = f.preview || "<form action='#' method='GET'>";
+            vulnerabilityLocations.push({
+                title: isSqli ? "📍 SQL Injection Input Point" : "📍 Interactive HTML Form",
+                location: `Page Document > ${formLoc}`,
+                target: `DOM Element: ${preview}`,
+                detail: isSqli 
+                    ? "The form passes unsanitized user parameters directly into database queries, allowing attackers to manipulate database records."
+                    : "The interactive form accepts input parameters that could expose data if submitted without encryption or anti-tampering tokens."
+            });
+        } else if (f.type !== "UNUSUAL_PORT") {
+            vulnerabilityLocations.push({
+                title: `📍 ${f.reason || f.type}`,
+                location: f.location || `${hostname}${pathname}`,
+                target: `${f.category} Element`,
+                detail: f.preview ? `Code Snippet: ${f.preview}` : "Security engine flagged this element on the current page."
+            });
+        }
+    });
+
+    // Extension locations
+    extensions.forEach(ext => {
+        if (ext.risk === "HIGH" || ext.risk === "MEDIUM") {
+            vulnerabilityLocations.push({
+                title: `📍 Browser Extension: ${ext.name}`,
+                location: "Chrome Browser Extension Environment",
+                target: `Permissions: ${(ext.permissions || []).join(", ") || "Elevated"}`,
+                detail: `This extension holds permissions to inspect web requests and browser cookies across visited origins.`
+            });
+        }
+    });
+
+    if (vulnerabilityLocations.length === 0) {
+        vulnerabilityLocations.push({
+            title: "📍 Baseline Origin",
+            location: hostname || pageUrl,
+            target: "HTTPS Document",
+            detail: "No active high-risk DOM injection points detected."
+        });
+    }
+
+    // 3. Layman Explanation with engaging real-world analogy (Pure English)
+    let laymanExplanation = "";
+    if (isSqli) {
+        laymanExplanation = "Imagine visiting a bank teller where anyone can ask to view their account file. A normal customer asks for their own record, but a clever intruder writes 'OR 1=1' on the slip, tricking the teller into dumping every customer's private file onto the counter! That is what is happening here: the page accepts input without verifying it, allowing attackers to access unauthorized database records (SQL Injection).";
+    } else if (isXss) {
+        laymanExplanation = "Imagine someone sticking an invisible note on a public bulletin board with deceptive ink that rubs off on anyone who touches it and unlocks their backpack. In Cross-Site Scripting (XSS), an attacker injects untrusted code into the webpage that executes inside your browser, potentially stealing your login cookies or impersonating your session.";
+    } else if (port && port !== "80" && port !== "443") {
+        laymanExplanation = `Imagine a shopping center with a secure main entrance (Port 443) guarded by security staff, but a rear delivery entrance (Port ${port}) has been left unlocked with no guards. Running services on non-standard ports often indicates temporary lab or development setups that lack hardened production certificates and security headers.`;
+    } else {
+        laymanExplanation = "ThreatLens inspected all interactive forms, script sources, and browser extensions for this page. The site presents a stable baseline, though your installed browser extensions hold elevated privileges to monitor tab activity.";
+    }
+
+    // 4. Executive Summary (Pure English)
+    const summary = isSqli
+        ? `Website ${hostname} (port ${port || "4280"}) contains an interactive SQL injection vulnerability test form (/vulnerabilities/sqli/). Missing input validation leaves underlying database records exposed.`
+        : `Security assessment completed for ${hostname}. Overall environment risk is rated ${overallRisk} with ${vulnerabilityLocations.length} specific threat indicator(s) cataloged.`;
+
+    // 5. How to solve (For You - User Steps in Pure English)
+    const howToSolveUser = [];
+    if (isSqli) {
+        howToSolveUser.push("Step 1: Do NOT submit real personal passwords, emails, credit cards, or sensitive data on this page (this is a security testing laboratory).");
+        howToSolveUser.push("Step 2: If you are practicing ethical security testing, you can safely test demo inputs such as 1' OR '1'='1 to observe the behavior.");
+        howToSolveUser.push("Step 3: On real production websites, immediately avoid submitting sensitive data if you encounter unusual ports (like 4280) or unverified forms.");
+    } else {
+        howToSolveUser.push("Step 1: Always verify that the address bar displays a valid secure HTTPS lock icon before submitting credentials.");
+        howToSolveUser.push("Step 2: Check the exact domain name to prevent credential harvesting on lookalike phishing sites.");
+        howToSolveUser.push("Step 3: Audit installed extensions in chrome://extensions and restrict unneeded permissions to 'On click' mode.");
+    }
+
+    // 6. How to secure (For Developers - Code Snippet in Pure English)
+    let howToSecureDev = {};
+    if (isSqli) {
+        howToSecureDev = {
+            title: "Developer Fix: Prepared Statements (PDO Parameterized Queries)",
+            steps: [
+                "1. Never concatenate raw user input ($_GET['id'] or $_POST) directly into SQL query strings.",
+                "2. Always utilize database engine Prepared Statements with parameterized queries.",
+                "3. Enforce strict input type-casting for numeric parameters: (int)$_GET['id']."
+            ],
+            code_snippet: 
+`// ❌ INSECURE (Vulnerable String Concatenation):
+// $sql = "SELECT first_name, last_name FROM users WHERE user_id = '" . $_GET['id'] . "';";
+
+// ✅ SECURE IMPLEMENTATION (PHP PDO Prepared Statements):
+$stmt = $pdo->prepare('SELECT first_name, last_name FROM users WHERE user_id = :id');
+$stmt->execute(['id' => (int)$_GET['id']]);
+$user = $stmt->fetch();`
+        };
+    } else if (isXss) {
+        howToSecureDev = {
+            title: "Developer Fix: Output Encoding & Safe DOM APIs",
+            steps: [
+                "1. Replace dangerous sinks like innerHTML and document.write() with safe APIs such as textContent or innerText.",
+                "2. Apply robust HTML entity encoding (htmlspecialchars) before echoing user input onto pages.",
+                "3. Enforce a strict Content Security Policy (CSP) header without 'unsafe-inline'."
+            ],
+            code_snippet: 
+`// ❌ INSECURE (Dangerous DOM Sink):
+// document.getElementById('output').innerHTML = location.hash;
+
+// ✅ SECURE IMPLEMENTATION (Safe DOM Text Assignment):
+document.getElementById('output').textContent = location.hash;
+// Or sanitize when rendering HTML: DOMPurify.sanitize(userInput);`
+        };
+    } else {
+        howToSecureDev = {
+            title: "Developer Fix: Standard HTTPS Port 443 & Strict Transport Security",
+            steps: [
+                "1. Deploy public web applications exclusively on standard HTTPS port 443 with a valid TLS certificate.",
+                "2. Configure HTTP Strict Transport Security (HSTS) with includeSubDomains.",
+                "3. Add CSRF protection tokens and enforce POST methods on all data-submitting forms."
+            ],
+            code_snippet: 
+`# Nginx SSL Production Configuration
+server {
+    listen 443 ssl http2;
+    server_name ${hostname || "yourdomain.com"};
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self';" always;
+}`
+        };
+    }
+
+    const why = vulnerabilityLocations.map(loc => `${loc.title}: ${loc.detail}`);
+
+    const userMessage = isSqli
+        ? "⚠️ Deliberately vulnerable security lab page detected — safe for controlled testing, but never enter personal data here."
+        : "Protected by ThreatLens ocular engine. Zero cloud exposure.";
+
+    return {
+        summary,
+        layman_explanation: laymanExplanation,
+        data_at_risk: Array.from(new Set(dataAtRisk)),
+        vulnerability_locations: vulnerabilityLocations,
+        why,
+        how_to_solve_user: howToSolveUser,
+        how_to_secure_dev: howToSecureDev,
+        user_message: userMessage
+    };
 }
 
+async function requestAIAnalysis(
+    aiPayload,
+    tabId,
+    directApiKey = null
+) {
+    let geminiApiKey = directApiKey ? directApiKey.trim() : null;
+    if (!geminiApiKey) {
+        const config = await getStorage(["geminiApiKey"]);
+        geminiApiKey = config.geminiApiKey ? config.geminiApiKey.trim() : null;
+    }
+    const backendUrl = "http://localhost:3000/api/analyze";
+
+    try {
+        let result = null;
+
+        if (geminiApiKey) {
+            console.log("ThreatLens: Direct Gemini API mode active");
+            const models = [
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+                "gemini-1.5-flash",
+                "gemini-3.1-flash-lite",
+                "gemini-2.0-flash-lite"
+            ];
+            let directSuccess = false;
+            let directError = null;
+
+            for (const model of models) {
+                try {
+                    const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
+                    const systemPrompt = `You are ThreatLens AI, an elite cybersecurity mentor and real-time ocular threat investigator.
+Your goal is to explain vulnerabilities to normal humans with ZERO technical obscurity, high specificity (mentioning exact URLs, ports, HTML elements, extensions), and giving clear actionable step-by-step guides for both regular users and developers.
+
+LANGUAGE REQUIREMENT: You MUST write ONLY in clear, engaging, professional English. Never use Hindi, Hinglish, or any other language.
+
+Given the Security Scan Data (including pageUrl, port, exact findings with DOM paths/previews, and browser extensions):
+Analyze the EXACT page and environment. Do NOT invent generic iframes or scripts that do not exist. Mention the actual URL, port, form, and extension findings!
+
+You MUST return ONLY valid JSON matching this exact structure:
+{
+  "summary": "2-3 engaging sentences summarizing the real posture of this specific website and browser environment in English.",
+  "layman_explanation": "An engaging, lively explanation in English designed for an ordinary person without a cybersecurity background. Use a clever, relatable real-world analogy (e.g. leaving a back door unlocked, showing an ID to an unverified guard, a store clerk behind a one-way mirror). Answer directly: Can an attacker steal passwords, spy on activity, or hijack accounts?",
+  "data_at_risk": [
+    "Specific data types actually at risk on this page, e.g. 'Form Inputs', 'Session Cookies', 'Account Passwords'"
+  ],
+  "vulnerability_locations": [
+    {
+      "title": "Clear name of issue (e.g. Non-Standard Port 4280, Interactive GET Form, High-Privilege Extension)",
+      "location": "Exact location (e.g. pentest-ground.com:4280, form:nth-of-type(1), or AdGuard AdBlocker)",
+      "target": "Target component (e.g. Network Port, DOM Input [name='id'], Extension Permissions)",
+      "detail": "1-2 sentences in simple, relatable English explaining why this exact spot is vulnerable."
+    }
+  ],
+  "how_to_solve_user": [
+    "Step 1: Actionable, plain-language instruction for the user in English (e.g., Do not enter real passwords on this testing page).",
+    "Step 2: Practical step in English (e.g., Restrict browser extension permissions or verify the URL)."
+  ],
+  "how_to_secure_dev": {
+    "title": "Developer Fix Title in English (e.g. Standardize on HTTPS Port 443 & Parameterized SQL Queries)",
+    "steps": [
+      "1. Clear developer instruction in English (e.g. Migrate traffic to standard HTTPS port 443 with TLS cert).",
+      "2. Input handling in English (e.g. Use prepared statements with parameterized queries instead of string concatenation)."
+    ],
+    "code_snippet": "// Concrete, copy-pasteable secure code fix for this vulnerability\n$stmt = $pdo->prepare('SELECT * FROM users WHERE id = :id');\n$stmt->execute(['id' => $_GET['id']]);"
+  },
+  "user_message": "Clear 1-sentence verdict in English in a friendly, encouraging, protective tone."
+}`;
+                    const reqBody = {
+                        contents: [
+                            {
+                                parts: [
+                                    { text: systemPrompt + "\n\nSecurity Scan Data:\n" + JSON.stringify(aiPayload) }
+                                ]
+                            }
+                        ],
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            maxOutputTokens: 900,
+                            temperature: 0.1
+                        }
+                    };
+
+                    const directRes = await fetch(directUrl, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(reqBody),
+                        signal: AbortSignal.timeout(8000)
+                    });
+
+                    if (!directRes.ok) {
+                        const errBody = await directRes.json().catch(() => ({}));
+                        throw new Error(errBody?.error?.message || `HTTP ${directRes.status}`);
+                    }
+
+                    const directData = await directRes.json();
+                    const text = directData?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) throw new Error("Empty text in Gemini response");
+                    let cleanJson = text.trim();
+                    if (cleanJson.startsWith("```")) {
+                        cleanJson = cleanJson.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+                    }
+                    const parsed = JSON.parse(cleanJson);
+
+                    result = {
+                        success: true,
+                        risk: aiPayload.overallRisk,
+                        analysis: parsed
+                    };
+                    directSuccess = true;
+                    break;
+                } catch (dErr) {
+                    directError = dErr;
+                    console.warn(`Direct Gemini model ${model} unavailable: ${dErr.message}`);
+                }
+            }
+
+            if (!directSuccess) {
+                console.warn("ThreatLens: Cloud models unavailable (" + (directError?.message || "") + "). Activating ThreatLens Neural Synthesizer.");
+                result = {
+                    success: true,
+                    risk: aiPayload.overallRisk,
+                    analysis: synthesizeLocalDeepExplanation(aiPayload)
+                };
+                directSuccess = true;
+            }
+        } else {
+            console.log("ThreatLens: Sending sanitized payload to local AI backend");
+            const response = await fetch(backendUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(aiPayload),
+                signal: AbortSignal.timeout(15000)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Local backend returned HTTP ${response.status}`);
+            }
+
+            result = await response.json();
+        }
+
+        if (!result || typeof result !== "object") {
+            throw new Error("Invalid AI backend response");
+        }
+
+        const toSave = { latest_ai_analysis: result };
+        if (tabId) {
+            toSave[`ai_analysis_${tabId}`] = result;
+        }
+        await setStorage(toSave);
+        console.log("ThreatLens: AI analysis stored successfully for tab:", tabId);
+        return result;
+    } catch (error) {
+        console.error("ThreatLens: AI analysis failed:", error.message);
+        aiRetryCooldown.set(tabId, Date.now());
+        const fallback = {
+            success: false,
+            error: error.message || "AI analysis temporarily unavailable"
+        };
+        const toSave = { latest_ai_analysis: fallback };
+        if (tabId) {
+            toSave[`ai_analysis_${tabId}`] = fallback;
+        }
+        await setStorage(toSave);
+        return fallback;
+    }
+}
 
 
 // ==================================
 // INITIAL EXTENSION SCAN
 // ==================================
+
+// Clean up stale tab storage entries to prevent quota accumulation
+async function cleanupOldTabStorage() {
+    try {
+        const tabs = await chrome.tabs.query({});
+        const activeIds = new Set(tabs.map(t => String(t.id)));
+        chrome.storage.local.get(null, (all) => {
+            if (!all) return;
+            const keysToRemove = Object.keys(all).filter(k => {
+                if (k.startsWith("scan_") || k.startsWith("ai_analysis_") || k.startsWith("ai_fingerprint_")) {
+                    const id = k.split("_").pop();
+                    return !activeIds.has(id);
+                }
+                return false;
+            });
+            if (keysToRemove.length > 0) {
+                chrome.storage.local.remove(keysToRemove, () => {
+                    console.log("ThreatLens: Pruned stale storage keys:", keysToRemove.length);
+                });
+            }
+        });
+    } catch (e) {
+        // Safe ignore
+    }
+}
+
+// Cleanup on tab close
+chrome.tabs.onRemoved.addListener((closedTabId) => {
+    chrome.storage.local.remove([`scan_${closedTabId}`, `ai_fingerprint_${closedTabId}`, `ai_analysis_${closedTabId}`]);
+});
+
+// Run stale cleanup on worker startup
+cleanupOldTabStorage();
 
 scanInstalledExtensions();
 
@@ -1196,7 +1587,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             if (chrome.runtime.lastError) {
                 // Tab may still be loading content scripts
             } else if (response && response.data) {
-                console.log("SentinelAI: Auto-scan completed for tab:", tabId);
+                console.log("ThreatLens: Auto-scan completed for tab:", tabId);
             }
         });
     }

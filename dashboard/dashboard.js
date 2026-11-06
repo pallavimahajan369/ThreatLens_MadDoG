@@ -1,4 +1,4 @@
-console.log("SentinelAI Dashboard loaded");
+console.log("ThreatLens Dashboard loaded");
 
 const params = new URLSearchParams(window.location.search);
 const tabId = params.get("tabId");
@@ -39,78 +39,929 @@ function isSamePage(urlA, urlB) {
     }
 }
 
+function extractFileNameFromUrl(urlStr, fallback = "index.html") {
+    if (!urlStr) return fallback;
+    try {
+        const u = new URL(urlStr, window.location.href);
+        const segs = u.pathname.split("/").filter(Boolean);
+        const last = segs[segs.length - 1];
+        if (last) {
+            return last + (u.hash ? u.hash : "");
+        }
+        return u.hostname || fallback;
+    } catch (e) {
+        return fallback;
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return "";
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// ==================================
+// COMPREHENSIVE FINDINGS KNOWLEDGE BASE
+// ==================================
+const findingKnowledgeBase = {
+    INLINE_SCRIPT: {
+        title: "Inline Script Execution Detected",
+        riskExplanation: "Inline JavaScript runs directly inside HTML markup without origin or file isolation. If attacker-controlled input reaches the page, inline scripts can execute arbitrary JavaScript (Cross-Site Scripting / XSS), allowing attackers to steal session cookies, hijack user accounts, or redirect users to malicious websites.",
+        solution: "1. Migrate inline JavaScript code into external .js files.\n2. Configure a strict Content Security Policy (CSP) header: `Content-Security-Policy: script-src 'self' https:;` and remove `'unsafe-inline'`.\n3. If inline scripts are unavoidable, use CSP cryptographic nonces (`nonce-rAnd0m`) or SHA-256 hashes."
+    },
+    EXTERNAL_SCRIPT: {
+        title: "External JavaScript Resources Detected",
+        riskExplanation: "External scripts are loaded from outside domains or Content Delivery Networks (CDNs). If a third-party CDN or script repository is compromised or injected with malware, attackers can execute rogue code directly inside your application (Magecart / Supply Chain attacks).",
+        solution: "1. Apply Subresource Integrity (SRI) attributes with cryptographic hashes to external scripts: `integrity='sha384-...' crossorigin='anonymous'`.\n2. Whitelist only trusted, reputable CDNs in your Content Security Policy (CSP).\n3. Host mission-critical scripts on your own origin rather than third-party hosts."
+    },
+    DANGEROUS_API: {
+        title: "Potentially Dangerous JavaScript API References",
+        riskExplanation: "APIs such as eval(), Function(), setTimeout(string), or setInterval(string) dynamically parse and compile text into executable JavaScript code. If user-controlled data or URL parameters reach these APIs, attackers can achieve remote code execution (DOM-based XSS).",
+        solution: "1. Replace `eval()` and `new Function()` with native JavaScript methods or `JSON.parse()` for data decoding.\n2. Pass function references directly to `setTimeout(myFunc, 1000)` instead of code strings `setTimeout('myFunc()', 1000)`.\n3. Disallow `'unsafe-eval'` in Content Security Policy (CSP)."
+    },
+    DANGEROUS_DOM_SINK: {
+        title: "Dangerous DOM Sink References Detected",
+        riskExplanation: "DOM sinks like `innerHTML`, `outerHTML`, or `document.write()` parse strings directly as HTML markup. When unsanitized parameters, hash fragments, or user input are assigned to these sinks, malicious HTML/script tags are injected and executed immediately in the user's browser (DOM XSS).",
+        solution: "1. Replace `innerHTML` and `outerHTML` with safe text assignment APIs like `textContent` or `innerText` when displaying text.\n2. Build DOM structures safely using `document.createElement()` and `element.setAttribute()`.\n3. If HTML rendering is required, sanitize input using a verified library such as DOMPurify before inserting into the DOM."
+    },
+    SENSITIVE_INPUT: {
+        title: "Sensitive / Personal Data Input Fields Detected",
+        riskExplanation: "Input fields that collect credentials, phone numbers, addresses, identity numbers, or personal identifying data (PII) are high-value targets for formjacking, keylogging extensions, and phishing scams.",
+        solution: "1. Ensure all sensitive input fields are contained in forms that transmit data strictly over HTTPS POST.\n2. Configure explicit autocomplete attributes (e.g. `autocomplete='username'`) and anti-CSRF protection.\n3. Prevent unauthorized third-party scripts from reading DOM elements on sensitive pages."
+    },
+    EXTERNAL_RESOURCE: {
+        title: "External Third-Party Resources Detected",
+        riskExplanation: "The page references multiple external assets (styles, media, fonts, tracking scripts). Insecure external resources can lead to mixed-content warnings, unauthorized third-party tracking, or traffic tampering if served over unencrypted connections.",
+        solution: "1. Ensure all external resources are loaded over secure HTTPS connections.\n2. Define strict Content Security Policy directives (`default-src 'self'`, `img-src`, `style-src`) to restrict allowed resource domains.\n3. Audit third-party tracking pixels and remove unneeded marketing tags."
+    },
+    PASSWORD_FIELD: {
+        title: "Password Input Field Detected",
+        riskExplanation: "Password fields collect sensitive authentication secrets. If unencrypted or exposed to untrusted third-party scripts or extensions, credentials can be harvested and accounts compromised.",
+        solution: "1. Ensure the page enforces HTTPS and HTTP Strict Transport Security (HSTS).\n2. Do not include untrusted third-party scripts or analytics on login and password change pages.\n3. Use strong, unique passwords with a password manager and enable multi-factor authentication (MFA)."
+    },
+    EMAIL_FIELD: {
+        title: "Email Input Field Detected",
+        riskExplanation: "Email input fields collect personally identifiable information (PII). Insecure transmission or exposure can lead to credential harvesting, spam, and identity tracking.",
+        solution: "1. Submit email forms exclusively via HTTPS POST requests.\n2. Validate and sanitize email format both client-side and server-side.\n3. Apply rate-limiting to prevent automated form submission attacks."
+    },
+    PAYMENT_FIELD: {
+        title: "Financial / Payment Input Detected",
+        riskExplanation: "Payment inputs collect credit card numbers, CVVs, expiration dates, or bank account credentials. Malicious browser extensions or XSS attacks could harvest this information (Magecart attacks).",
+        solution: "1. Use PCI-DSS compliant hosted iframe fields (such as Stripe Elements or PayPal SDK) rather than raw inputs.\n2. Restrict script origins with strict CSP (`script-src`, `connect-src`).\n3. Never log or retain unmasked CVV or full credit card numbers in browser storage or logs."
+    },
+    API_KEY_INPUT: {
+        title: "API Key / Access Token Input Detected",
+        riskExplanation: "Fields accepting API keys, secret tokens, or access credentials can expose administrative privileges or cloud resources if submitted insecurely or logged in browser history.",
+        solution: "1. Never transmit API secret keys via client-side web forms.\n2. Use OAuth2/OIDC authorization flows or backend session authentication instead.\n3. Rotate any API keys or tokens that may have been entered into untrusted pages."
+    },
+    CROSS_ORIGIN_ACTION: {
+        title: "Cross-Origin Form Submission",
+        riskExplanation: "The form submits sensitive user input directly to a different domain/origin. This is a common pattern in phishing sites, clickjacking, or data exfiltration schemes.",
+        solution: "1. Verify that the destination domain is an authorized, trusted payment or authentication gateway.\n2. If not intended, change form action to submit to your own verified origin endpoint.\n3. Implement Subresource Integrity and strict Content Security Policy (CSP) `form-action` directives."
+    },
+    SENSITIVE_GET_FORM: {
+        title: "Sensitive Input in GET Form Detected",
+        riskExplanation: "Forms using the GET method append submitted values (passwords, tokens, or emails) directly into the URL query string. This causes credentials to be stored in plain text in browser history, server logs, web proxies, and referrer headers.",
+        solution: "1. Change the form method from 'GET' to 'POST' (`method='POST'`).\n2. Ensure the endpoint processes authentication and sensitive data strictly over HTTPS.\n3. Clear any sensitive parameters from server access logs and browser history."
+    },
+    FORMS: {
+        title: "HTML Forms Detected",
+        riskExplanation: "Forms are the primary interactive entry point for user input. If forms submit via HTTP instead of HTTPS, or submit across untrusted origins, user input can be intercepted or manipulated.",
+        solution: "1. Always specify an explicit action and set `method='POST'` for state-changing forms.\n2. Ensure all form actions point to HTTPS endpoints.\n3. Implement anti-CSRF tokens in all transactional forms."
+    },
+    HIDDEN_ELEMENTS: {
+        title: "Hidden DOM Elements Detected",
+        riskExplanation: "Hidden elements can be used by malicious actors for clickjacking, invisible overlay attacks, or stealth data harvesting without user awareness.",
+        solution: "1. Inspect hidden inputs and elements to ensure they serve legitimate application purposes.\n2. Remove any obsolete or unauthorized hidden iframes or fields.\n3. Implement X-Frame-Options or CSP frame-ancestors to prevent framing."
+    },
+    SUSPICIOUS_FORM_STRUCTURE: {
+        title: "Suspicious Form Structure Detected",
+        riskExplanation: "Forms with missing actions, empty endpoints, or javascript: pseudo-protocol actions can lead to unexpected script execution or unvalidated submissions.",
+        solution: "1. Explicitly declare target endpoint actions for all forms.\n2. Avoid using 'javascript:' in form action attributes.\n3. Validate form submission handlers."
+    },
+    IFRAME_DETECTED: {
+        title: "Embedded Iframe Detected",
+        riskExplanation: "Iframes embed external web documents. Unrestricted iframes can execute unauthorized code, trigger drive-by downloads, or compromise user sessions.",
+        solution: "1. Add the `sandbox` attribute to iframes with minimum required privileges (e.g. `sandbox='allow-scripts'`).\n2. Set CSP `frame-src` to restrict which domains can be framed.\n3. Use HTTPS for all iframe source URLs."
+    },
+    CROSS_ORIGIN_IFRAME: {
+        title: "Cross-Origin Iframe Detected",
+        riskExplanation: "The page embeds content from a different domain. If that domain is unverified or malicious, it can perform phishing, clickjacking, or cryptomining in the background.",
+        solution: "1. Verify the domain of all embedded third-party iframes.\n2. Restrict iframe permissions using `sandbox='allow-scripts allow-same-origin'`.\n3. Use CSP frame-src directive to enforce trusted sources."
+    },
+    HIDDEN_IFRAME: {
+        title: "Hidden or Zero-Size Iframe Detected",
+        riskExplanation: "Completely hidden (0x0 pixel or display:none) iframes are frequently used by malware and adware to perform silent ad-fraud, tracking, or cookie-dropping without user knowledge.",
+        solution: "1. Investigate the source URL of hidden iframes.\n2. Remove unnecessary tracking iframes.\n3. Block unauthorized hidden frames using Content Security Policy."
+    },
+    SUSPICIOUS_IFRAME_SOURCE: {
+        title: "Suspicious Iframe Source Detected",
+        riskExplanation: "The iframe source points to an unverified or flagged domain, potentially serving phishing or exploit payloads.",
+        solution: "1. Do not interact with or provide credentials inside this iframe.\n2. Block the flagged iframe source domain in your network/firewall.\n3. Report phishing domains to Safe Browsing."
+    },
+    HTTP_PROTOCOL: {
+        title: "Unencrypted HTTP Connection",
+        riskExplanation: "The connection to this site is unencrypted. Anyone on the same network (e.g. public Wi-Fi) can intercept credentials, session cookies, and modify page contents.",
+        solution: "1. Upgrade to HTTPS and configure automatic HTTP-to-HTTPS redirects.\n2. Enforce HTTP Strict Transport Security (HSTS) with a long max-age.\n3. Avoid entering sensitive passwords or payment details on HTTP sites."
+    },
+    IP_ADDRESS: {
+        title: "IP Address Used as Hostname",
+        riskExplanation: "Accessing websites directly via raw IP addresses rather than registered domain names is a typical tactic used in malware command-and-control and phishing infrastructure.",
+        solution: "1. Use verified, registered domain names with valid SSL/TLS certificates.\n2. Avoid entering credentials or downloading files from raw IP address hosts."
+    },
+    SUSPICIOUS_TLD: {
+        title: "Suspicious Top-Level Domain (TLD)",
+        riskExplanation: "Certain free or high-abuse TLDs are statistically correlated with disposable phishing sites, malware distribution, and spam campaigns.",
+        solution: "1. Exercise caution before entering credentials or downloading files.\n2. Verify the site's brand authenticity through verified search channels."
+    },
+    HOMOGLYPH: {
+        title: "Homoglyph / Lookalike Domain Detected",
+        riskExplanation: "The domain uses visually deceptive characters or lookalikes to impersonate well-known brands (IDN homograph attack).",
+        solution: "1. Carefully inspect the address bar for spoofed characters.\n2. Manually type the official website address into your browser."
+    },
+    PUNYCODE: {
+        title: "Punycode (xn--) Domain Detected",
+        riskExplanation: "Punycode domain encodings can disguise internationalized spoofed characters to fool users into thinking they are on a trusted website.",
+        solution: "1. Verify the decoded hostname in your browser's address bar.\n2. Do not submit sensitive data if the domain does not match the genuine service."
+    },
+    SUBDOMAIN_COUNT: {
+        title: "Excessive Subdomains Detected",
+        riskExplanation: "URLs with many nested subdomains often attempt to mimic genuine domains in URL prefixes to mislead users on mobile or truncated address bars.",
+        solution: "1. Identify the genuine root domain (the part right before the TLD).\n2. Ensure the root domain belongs to the official organization."
+    },
+    PORT: {
+        title: "Non-Standard Port Detected",
+        riskExplanation: "Using non-standard ports (e.g. 8080, 8443, 8888) may indicate temporary testing servers, compromised hosts, or unmanaged infrastructure.",
+        solution: "1. Ensure standard secure web ports (443) are used for production websites.\n2. Verify that non-standard ports are intentional and properly secured."
+    },
+    DATA_URI: {
+        title: "Data URI Scheme Detected",
+        riskExplanation: "Data URIs encode executable HTML or scripts directly into the URL bar, completely bypassing origin-based web security protections.",
+        solution: "1. Avoid opening data: URLs from untrusted links.\n2. Configure CSP to disallow data: URI navigation."
+    },
+    JWT: {
+        title: "JSON Web Token (JWT) Detected in DOM",
+        riskExplanation: "JWT tokens in DOM source can grant administrative access or user impersonation if exposed to third-party scripts or stored insecurely.",
+        solution: "1. Store authentication tokens in secure, HttpOnly, SameSite cookies instead of DOM or localStorage.\n2. Rotate exposed tokens immediately."
+    },
+    TOKEN_OR_SECRET: {
+        title: "API Secret / Private Token Exposed",
+        riskExplanation: "Hardcoded API keys, private credentials, or secrets in client-side code allow anyone inspecting the page to access backend services.",
+        solution: "1. Revoke and rotate the exposed secret key immediately.\n2. Move API calls requiring secret keys to backend server functions."
+    },
+    AWS_ACCESS_KEY: {
+        title: "AWS Access Key Detected in DOM",
+        riskExplanation: "Exposed cloud credentials (AKIA...) can allow malicious actors to compromise cloud infrastructure and exfiltrate databases.",
+        solution: "1. Invalidate and rotate the AWS IAM access key in the AWS console immediately.\n2. Use IAM Roles and STS temporary credentials instead of long-lived access keys."
+    },
+    CREDIT_CARD: {
+        title: "Credit Card Pattern Detected in DOM",
+        riskExplanation: "Exposing credit card numbers in DOM text violates PCI-DSS compliance and risks financial fraud.",
+        solution: "1. Mask credit card numbers (display only last 4 digits).\n2. Never render full card numbers in plain text HTML."
+    },
+    GENERIC_PROMPT_INJECTION: {
+        title: "Potential Prompt Injection Detected",
+        riskExplanation: "The page contains text designed to override, hijack, or deceive AI language models into ignoring instructions or leaking data.",
+        solution: "1. Treat all untrusted website content as unverified data.\n2. Separate system instructions from user-provided context using delimiter boundaries and guardrails."
+    },
+    SYSTEM_OVERRIDE: {
+        title: "System Override Prompt Injection Detected",
+        riskExplanation: "Input attempting to instruct AI models to 'ignore previous instructions' or assume an unconstrained persona.",
+        solution: "1. Apply input sanitization and safety filters before feeding content into AI models.\n2. Use system-level immutable instruction prompts."
+    }
+};
+
 // ==================================
 // SETTINGS HANDLERS
 // ==================================
+// PROTECTION SETTINGS & KEY CONTROLLER
+// ==================================
+const geminiApiKeyInput = document.getElementById("geminiApiKeyInput");
+const toggleKeyVisibilityBtn = document.getElementById("toggleKeyVisibilityBtn");
+const saveAiConfigBtn = document.getElementById("saveAiConfigBtn");
+const removeAiConfigBtn = document.getElementById("removeAiConfigBtn");
+const testAiConnectionBtn = document.getElementById("testAiConnectionBtn");
+const aiConnectionStatusMsg = document.getElementById("aiConnectionStatusMsg");
+const aiKeyBadge = document.getElementById("aiKeyBadge");
+const triggerAiBtn = document.getElementById("triggerAiBtn");
+const aiPromptBanner = document.getElementById("aiPromptBanner");
+const scrollToSettingsBtn = document.getElementById("scrollToSettingsBtn");
 
-const aiToggle = document.getElementById("aiAnalysisToggle");
-
-function updateAiAndLocalStatus() {
-    chrome.storage.local.get(
-        ["privacyMode", "aiEnabled", "aiConsent"],
-        (settings) => {
-            const aiEnabled = settings.aiEnabled === true;
-            const aiConsent = settings.aiConsent === true;
-            const aiIsActive = aiEnabled && aiConsent;
-
-            const aiStatus =
-                document.getElementById("aiAnalysisStatus");
-
-            const localStatus =
-                document.getElementById("localOnlyStatus");
-
-            const privacyStatusOverview =
-                document.getElementById("privacyStatusOverview");
-
-            const privacyStatusSettings =
-                document.getElementById("privacyStatusSettings");
-
-            if (aiToggle) {
-                aiToggle.checked = aiIsActive;
-            }
-
-            if (aiStatus) {
-                aiStatus.textContent = aiIsActive ? "ON" : "OFF";
-                aiStatus.className =
-                    aiIsActive ? "enabled" : "disabled";
-            }
-
-            if (localStatus) {
-                localStatus.textContent = "ON";
-                localStatus.className = "enabled";
-            }
-
-            if (privacyStatusOverview) {
-                privacyStatusOverview.textContent = "ON";
-                privacyStatusOverview.className = "enabled";
-            }
-
-            if (privacyStatusSettings) {
-                privacyStatusSettings.textContent = "ON";
-                privacyStatusSettings.className = "enabled";
-            }
-        }
-    );
+function updateKeyStatusBadge(hasKey) {
+    if (!aiKeyBadge) return;
+    if (hasKey) {
+        aiKeyBadge.textContent = "CONFIGURED";
+        aiKeyBadge.className = "status-pill enabled";
+    } else {
+        aiKeyBadge.textContent = "NOT CONFIGURED";
+        aiKeyBadge.className = "status-pill disabled";
+    }
 }
 
-if (aiToggle) {
-    aiToggle.addEventListener("change", () => {
-        const enabled = aiToggle.checked;
-        chrome.storage.local.set(
-            {
-                aiEnabled: enabled,
-                aiConsent: enabled,
-                privacyMode: true
-            },
-            () => {
-                updateAiAndLocalStatus();
-                loadDashboardData();
-            }
-        );
+// Load saved key state
+chrome.storage.local.get(["geminiApiKey"], (cfg) => {
+    const key = cfg.geminiApiKey?.trim();
+    if (geminiApiKeyInput && key) {
+        geminiApiKeyInput.value = key;
+    }
+    updateKeyStatusBadge(!!key);
+    if (key && aiPromptBanner) {
+        aiPromptBanner.classList.add("hidden");
+    }
+});
+
+// Toggle key visibility (Show / Hide eye)
+if (toggleKeyVisibilityBtn && geminiApiKeyInput) {
+    toggleKeyVisibilityBtn.addEventListener("click", () => {
+        const isPassword = geminiApiKeyInput.type === "password";
+        geminiApiKeyInput.type = isPassword ? "text" : "password";
+        toggleKeyVisibilityBtn.textContent = isPassword ? "🙈" : "👁️";
     });
 }
 
-updateAiAndLocalStatus();
+// Save Key
+if (saveAiConfigBtn) {
+    saveAiConfigBtn.addEventListener("click", () => {
+        const key = geminiApiKeyInput ? geminiApiKeyInput.value.trim() : "";
+        if (!key) {
+            if (aiConnectionStatusMsg) {
+                aiConnectionStatusMsg.className = "connection-status-msg status-error";
+                aiConnectionStatusMsg.textContent = "⚠️ Please paste a valid Gemini API key first.";
+                aiConnectionStatusMsg.classList.remove("hidden");
+            }
+            return;
+        }
+
+        chrome.storage.local.set({ geminiApiKey: key }, () => {
+            if (chrome.runtime.lastError) {}
+            updateKeyStatusBadge(true);
+            if (aiPromptBanner) aiPromptBanner.classList.add("hidden");
+            if (aiConnectionStatusMsg) {
+                aiConnectionStatusMsg.className = "connection-status-msg status-success";
+                aiConnectionStatusMsg.textContent = "✅ Key saved securely in your browser!";
+                aiConnectionStatusMsg.classList.remove("hidden");
+                setTimeout(() => aiConnectionStatusMsg.classList.add("hidden"), 4000);
+            }
+        });
+    });
+}
+
+// Remove Key
+if (removeAiConfigBtn) {
+    removeAiConfigBtn.addEventListener("click", () => {
+        chrome.storage.local.remove(["geminiApiKey"], () => {
+            if (geminiApiKeyInput) geminiApiKeyInput.value = "";
+            updateKeyStatusBadge(false);
+            if (aiConnectionStatusMsg) {
+                aiConnectionStatusMsg.className = "connection-status-msg status-error";
+                aiConnectionStatusMsg.textContent = "🗑️ Key removed from local storage.";
+                aiConnectionStatusMsg.classList.remove("hidden");
+                setTimeout(() => aiConnectionStatusMsg.classList.add("hidden"), 3000);
+            }
+        });
+    });
+}
+
+// Test Key Connection
+if (testAiConnectionBtn) {
+    testAiConnectionBtn.addEventListener("click", () => {
+        const inputKey = geminiApiKeyInput ? geminiApiKeyInput.value.trim() : "";
+        chrome.storage.local.get(["geminiApiKey"], (cfg) => {
+            const currentInputKey = inputKey || (cfg.geminiApiKey ? cfg.geminiApiKey.trim() : "");
+            if (!currentInputKey) {
+                if (aiConnectionStatusMsg) {
+                    aiConnectionStatusMsg.className = "connection-status-msg status-error";
+                    aiConnectionStatusMsg.textContent = "⚠️ Please paste your Gemini API key in the box first.";
+                    aiConnectionStatusMsg.classList.remove("hidden");
+                }
+                return;
+            }
+
+            if (geminiApiKeyInput && !geminiApiKeyInput.value) {
+                geminiApiKeyInput.value = currentInputKey;
+            }
+
+            // Auto-persist key
+            chrome.storage.local.set({ geminiApiKey: currentInputKey }, () => {
+                if (chrome.runtime.lastError) {}
+                updateKeyStatusBadge(true);
+                if (aiPromptBanner) aiPromptBanner.classList.add("hidden");
+            });
+
+            if (!aiConnectionStatusMsg) return;
+            aiConnectionStatusMsg.className = "connection-status-msg status-testing";
+            aiConnectionStatusMsg.textContent = "⏳ Validating key with Google Gemini...";
+            aiConnectionStatusMsg.classList.remove("hidden");
+            testAiConnectionBtn.disabled = true;
+
+            chrome.runtime.sendMessage({
+                type: "TEST_AI_CONNECTION",
+                apiKey: currentInputKey
+            }, (res) => {
+                testAiConnectionBtn.disabled = false;
+                if (chrome.runtime.lastError) {
+                    aiConnectionStatusMsg.className = "connection-status-msg status-error";
+                    aiConnectionStatusMsg.textContent = "❌ Error: " + chrome.runtime.lastError.message;
+                    return;
+                }
+                if (res && res.success) {
+                    aiConnectionStatusMsg.className = "connection-status-msg status-success";
+                    aiConnectionStatusMsg.textContent = "🟢 " + res.message;
+                } else {
+                    aiConnectionStatusMsg.className = "connection-status-msg status-error";
+                    aiConnectionStatusMsg.textContent = "❌ " + (res?.error || "Key validation failed");
+                }
+            });
+        });
+    });
+}
+
+// Scroll to settings button from banner
+if (scrollToSettingsBtn) {
+    scrollToSettingsBtn.addEventListener("click", () => {
+        const sec = document.getElementById("aiKeySection");
+        if (sec) {
+            sec.scrollIntoView({ behavior: "smooth", block: "center" });
+            if (geminiApiKeyInput) {
+                geminiApiKeyInput.classList.add("highlight-pulse");
+                geminiApiKeyInput.focus();
+                setTimeout(() => geminiApiKeyInput.classList.remove("highlight-pulse"), 1800);
+            }
+        }
+    });
+}
+
+// ==================================
+// RENDER AI ANALYSIS
+// ==================================
+function renderAiAnalysis(aiData) {
+    const aiSummaryElement = document.getElementById("aiSummary");
+    const aiLaymanElement = document.getElementById("aiLaymanExplanation");
+    const aiDataAtRiskContainer = document.getElementById("aiDataAtRiskContainer");
+    const aiDataAtRiskWrapper = document.getElementById("aiDataAtRiskWrapper");
+    const aiLocationsSection = document.getElementById("aiLocationsSection");
+    const aiLocationsContainer = document.getElementById("aiLocationsContainer");
+    const aiUserStepsList = document.getElementById("aiUserStepsList");
+    const aiDevFixTitle = document.getElementById("aiDevFixTitle");
+    const aiDevStepsList = document.getElementById("aiDevStepsList");
+    const aiDevCodeWrapper = document.getElementById("aiDevCodeWrapper");
+    const aiDevCodeSnippet = document.getElementById("aiDevCodeSnippet");
+    const aiUserMessageElement = document.getElementById("aiUserMessage");
+
+    const analysis = aiData?.analysis || (aiData?.summary ? aiData : null);
+    if (!analysis) return false;
+
+    // 1. Executive Summary
+    if (aiSummaryElement) {
+        aiSummaryElement.textContent = analysis.summary || "AI security assessment completed.";
+    }
+
+    // 2. Layman Explanation (Conversational, easy-to-understand analogy)
+    if (aiLaymanElement) {
+        aiLaymanElement.textContent = analysis.layman_explanation ||
+            "This scan analyzed the code, forms, and network ports of this page to detect whether data could be intercepted or manipulated.";
+    }
+
+    // 3. Potential Exposure Pills
+    if (aiDataAtRiskContainer && aiDataAtRiskWrapper) {
+        aiDataAtRiskContainer.replaceChildren();
+        const dataAtRisk = Array.isArray(analysis.data_at_risk) ? analysis.data_at_risk : [];
+        if (dataAtRisk.length > 0) {
+            aiDataAtRiskWrapper.style.display = "flex";
+            dataAtRisk.forEach((item) => {
+                const pill = document.createElement("span");
+                pill.className = "risk-pill";
+                pill.textContent = "⚠️ " + item;
+                aiDataAtRiskContainer.appendChild(pill);
+            });
+        } else {
+            aiDataAtRiskWrapper.style.display = "none";
+        }
+    }
+
+    // 4. Exact Vulnerability Locations
+    if (aiLocationsSection && aiLocationsContainer) {
+        aiLocationsContainer.replaceChildren();
+        const locs = Array.isArray(analysis.vulnerability_locations) ? analysis.vulnerability_locations : [];
+        if (locs.length > 0) {
+            aiLocationsSection.style.display = "block";
+            locs.forEach((loc) => {
+                const card = document.createElement("div");
+                card.className = "location-card";
+
+                const titleEl = document.createElement("div");
+                titleEl.className = "loc-card-title";
+                titleEl.textContent = loc.title || "Security Vulnerability Location";
+
+                const badgeStrip = document.createElement("div");
+                badgeStrip.className = "loc-badge-strip";
+
+                if (loc.location) {
+                    const locBadge = document.createElement("span");
+                    locBadge.className = "loc-badge";
+                    locBadge.textContent = "📍 " + loc.location;
+                    badgeStrip.appendChild(locBadge);
+                }
+                if (loc.target) {
+                    const targetBadge = document.createElement("span");
+                    targetBadge.className = "loc-badge";
+                    targetBadge.style.color = "#38bdf8";
+                    targetBadge.style.borderColor = "rgba(56, 189, 248, 0.4)";
+                    targetBadge.style.background = "rgba(56, 189, 248, 0.15)";
+                    targetBadge.textContent = "🎯 " + loc.target;
+                    badgeStrip.appendChild(targetBadge);
+                }
+
+                const detailEl = document.createElement("div");
+                detailEl.className = "loc-card-detail";
+                detailEl.textContent = loc.detail || "";
+
+                card.appendChild(titleEl);
+                card.appendChild(badgeStrip);
+                if (loc.detail) card.appendChild(detailEl);
+
+                aiLocationsContainer.appendChild(card);
+            });
+        } else {
+            aiLocationsSection.style.display = "none";
+        }
+    }
+
+    // 5. Actionable Steps For You (User Guide)
+    if (aiUserStepsList) {
+        aiUserStepsList.replaceChildren();
+        const userSteps = Array.isArray(analysis.how_to_solve_user) 
+            ? analysis.how_to_solve_user 
+            : (Array.isArray(analysis.recommendations) 
+                ? analysis.recommendations.filter(r => String(r.priority || "").includes("YOU") || String(r.priority || "").includes("IMMEDIATE")).map(r => r.action || r)
+                : ["Verify the website domain before entering credentials.", "Review installed browser extensions."]);
+
+        userSteps.forEach(step => {
+            const item = document.createElement("div");
+            item.className = "step-item";
+            item.textContent = String(step);
+            aiUserStepsList.appendChild(item);
+        });
+    }
+
+    // 6. Developer Fix & Code Snippet
+    if (aiDevStepsList) {
+        aiDevStepsList.replaceChildren();
+        const devData = analysis.how_to_secure_dev || {};
+        if (aiDevFixTitle && devData.title) {
+            aiDevFixTitle.textContent = devData.title;
+        }
+
+        const devSteps = Array.isArray(devData.steps) 
+            ? devData.steps 
+            : (Array.isArray(analysis.recommendations)
+                ? analysis.recommendations.filter(r => String(r.priority || "").includes("DEV") || String(r.priority || "").includes("CRITICAL")).map(r => r.action || r)
+                : ["Enforce HTTPS port 443 with HSTS.", "Sanitize all dynamic inputs before DOM and database insertion."]);
+
+        devSteps.forEach(step => {
+            const item = document.createElement("div");
+            item.className = "step-item";
+            item.textContent = String(step);
+            aiDevStepsList.appendChild(item);
+        });
+
+        if (aiDevCodeWrapper && aiDevCodeSnippet) {
+            if (devData.code_snippet) {
+                aiDevCodeSnippet.textContent = devData.code_snippet;
+                aiDevCodeWrapper.style.display = "block";
+            } else {
+                aiDevCodeWrapper.style.display = "none";
+            }
+        }
+    }
+
+    // 7. Security Verdict
+    if (aiUserMessageElement) {
+        aiUserMessageElement.textContent = analysis.user_message || "Security analysis verified by ThreatLens Ocular Engine.";
+    }
+
+    return true;
+}
+
+if (typeof window !== "undefined") {
+    window.renderAiAnalysis = renderAiAnalysis;
+}
+
+// On-demand Analyze with AI button
+if (triggerAiBtn) {
+    triggerAiBtn.addEventListener("click", () => {
+        const currentInputKey = geminiApiKeyInput ? geminiApiKeyInput.value.trim() : "";
+        chrome.storage.local.get(["geminiApiKey"], (cfg) => {
+            const savedKey = (cfg.geminiApiKey || currentInputKey)?.trim();
+            const activeKey = currentInputKey || savedKey;
+
+            if (!activeKey) {
+                if (aiPromptBanner) {
+                    aiPromptBanner.classList.remove("hidden");
+                }
+                const sec = document.getElementById("aiKeySection");
+                if (sec) {
+                    sec.scrollIntoView({ behavior: "smooth", block: "center" });
+                    if (geminiApiKeyInput) {
+                        geminiApiKeyInput.classList.add("highlight-pulse");
+                        geminiApiKeyInput.focus();
+                        setTimeout(() => geminiApiKeyInput.classList.remove("highlight-pulse"), 1800);
+                    }
+                }
+                return;
+            }
+
+            if (currentInputKey) {
+                chrome.storage.local.set({ geminiApiKey: currentInputKey }, () => {
+                    if (chrome.runtime.lastError) {}
+                    updateKeyStatusBadge(true);
+                });
+            }
+
+            if (aiPromptBanner) aiPromptBanner.classList.add("hidden");
+            const originalHtml = triggerAiBtn.innerHTML;
+            triggerAiBtn.innerHTML = '<span class="btn-icon">⏳</span> Analyzing with Gemini...';
+            triggerAiBtn.classList.add("loading");
+            triggerAiBtn.disabled = true;
+
+            const aiSummaryEl = document.getElementById("aiSummary");
+            const aiWhyEl = document.getElementById("aiWhy");
+            const aiRecEl = document.getElementById("aiRecommendations");
+
+            const stages = [
+                "⚡ Compacting DOM & security findings...",
+                "🧠 Querying Gemini Neural Engine...",
+                "🛡️ Formulating instant threat remediation..."
+            ];
+            let currentStage = 0;
+            let stageInterval = null;
+
+            if (aiSummaryEl) {
+                aiSummaryEl.innerHTML = '<div class="ai-analyzing-box"><span class="chakra-pulse"></span> <em id="aiStageText">' + stages[0] + '</em></div>';
+                stageInterval = setInterval(() => {
+                    currentStage = (currentStage + 1) % stages.length;
+                    const stageTextEl = document.getElementById("aiStageText");
+                    if (stageTextEl) {
+                        stageTextEl.textContent = stages[currentStage];
+                    }
+                }, 1000);
+            }
+            if (aiWhyEl) aiWhyEl.textContent = "Extracting top vulnerability indicators...";
+            if (aiRecEl) aiRecEl.textContent = "Synthesizing remediation strategy...";
+
+            let isFinished = false;
+            // 15-second client-side safety watchdog so it NEVER gets stuck
+            const watchdog = setTimeout(() => {
+                if (!isFinished) {
+                    isFinished = true;
+                    if (stageInterval) clearInterval(stageInterval);
+                    triggerAiBtn.disabled = false;
+                    triggerAiBtn.innerHTML = originalHtml;
+                    triggerAiBtn.classList.remove("loading");
+                    if (aiSummaryEl) {
+                        aiSummaryEl.innerHTML = '<span style="color: #f87171;">⚠️ AI analysis timed out. Check your internet connection or click \"✦ Analyze with AI\" to retry.</span>';
+                    }
+                }
+            }, 15000);
+
+            chrome.runtime.sendMessage({
+                type: "FORCE_AI_SCAN",
+                tabId: tabId ? Number(tabId) : null,
+                apiKey: activeKey
+            }, (res) => {
+                if (isFinished) return;
+                isFinished = true;
+                clearTimeout(watchdog);
+                if (stageInterval) clearInterval(stageInterval);
+                triggerAiBtn.disabled = false;
+                triggerAiBtn.innerHTML = originalHtml;
+                triggerAiBtn.classList.remove("loading");
+
+                if (chrome.runtime.lastError) {
+                    console.error("AI trigger error:", chrome.runtime.lastError.message);
+                    if (aiSummaryEl) {
+                        aiSummaryEl.innerHTML = '<span style="color: #f87171;">❌ AI Trigger Error: ' + chrome.runtime.lastError.message + '</span>';
+                    }
+                    return;
+                }
+
+                if (res && res.success === false) {
+                    if (aiSummaryEl) {
+                        aiSummaryEl.innerHTML = '<span style="color: #f87171;">❌ AI Analysis Error: ' + (res.error || "Request failed") + '</span>';
+                    }
+                    return;
+                }
+
+                if (aiPromptBanner) aiPromptBanner.classList.add("hidden");
+                const freshAnalysis = res?.result?.analysis || res?.analysis || res?.result;
+                if (freshAnalysis) {
+                    try {
+                        const renderFn = (typeof renderAiAnalysis === "function") 
+                            ? renderAiAnalysis 
+                            : (typeof window !== "undefined" && typeof window.renderAiAnalysis === "function" ? window.renderAiAnalysis : null);
+                        if (renderFn) {
+                            renderFn(freshAnalysis);
+                        }
+                    } catch (e) {
+                        console.error("ThreatLens: Error rendering AI analysis:", e);
+                    }
+                }
+                loadDashboardData();
+            });
+        });
+    });
+}
+
+
+// ==================================
+// MODAL CONTROLLER & DETAILS VIEWER
+// ==================================
+
+const modalOverlay = document.getElementById("findingDetailModal");
+const modalCloseBtn = document.getElementById("modalCloseBtn");
+const modalCloseFooterBtn = document.getElementById("modalCloseFooterBtn");
+
+function closeFindingModal() {
+    if (modalOverlay) {
+        modalOverlay.classList.add("hidden");
+        document.body.style.overflow = "";
+    }
+}
+
+if (modalCloseBtn) {
+    modalCloseBtn.addEventListener("click", closeFindingModal);
+}
+
+if (modalCloseFooterBtn) {
+    modalCloseFooterBtn.addEventListener("click", closeFindingModal);
+}
+
+if (modalOverlay) {
+    modalOverlay.addEventListener("click", (e) => {
+        if (e.target === modalOverlay) {
+            closeFindingModal();
+        }
+    });
+}
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modalOverlay && !modalOverlay.classList.contains("hidden")) {
+        closeFindingModal();
+    }
+});
+
+function openFindingModal(finding, pageUrl) {
+    if (!modalOverlay || !finding) return;
+
+    const severity = (finding.severity || "LOW").toUpperCase();
+    const type = finding.type || "UNKNOWN";
+    const category = finding.category || "SECURITY";
+    const kb = findingKnowledgeBase[type] || {
+        title: finding.reason || "Security Finding",
+        riskExplanation: "This pattern was flagged by ThreatLens because it represents potential security risk, unauthorized behavior, or insecure data handling on the page.",
+        solution: "1. Review the flagged elements and code snippets to verify whether this behavior is intended.\n2. Ensure all external and dynamic scripts are properly isolated and sanitized.\n3. Enforce strict Content Security Policy (CSP) and HTTPS headers."
+    };
+
+    // Header badge & title
+    const modalSeverityBadge = document.getElementById("modalSeverityBadge");
+    if (modalSeverityBadge) {
+        modalSeverityBadge.textContent = severity;
+        modalSeverityBadge.className = `modal-badge badge-${severity.toLowerCase()}`;
+    }
+
+    const modalTitle = document.getElementById("modalTitle");
+    if (modalTitle) {
+        modalTitle.textContent = finding.details?.title || kb.title || finding.reason;
+    }
+
+    // Meta strip
+    const modalCategory = document.getElementById("modalCategory");
+    if (modalCategory) {
+        modalCategory.textContent = category;
+    }
+
+    const modalUrl = document.getElementById("modalUrl");
+    if (modalUrl) {
+        modalUrl.textContent = pageUrl || "Current Website";
+        modalUrl.title = pageUrl || "";
+    }
+
+    const items = finding.details?.items || [];
+    const modalItemsCount = document.getElementById("modalItemsCount");
+    if (modalItemsCount) {
+        modalItemsCount.textContent = items.length > 0
+            ? `${items.length} instance(s)`
+            : "1 finding";
+    }
+
+    // Itemized Instances Section
+    const modalItemsContainer = document.getElementById("modalItemsContainer");
+    if (modalItemsContainer) {
+        modalItemsContainer.replaceChildren();
+
+        if (items.length > 0) {
+            items.forEach((item, index) => {
+                const card = document.createElement("div");
+                card.className = "modal-item-card";
+
+                const header = document.createElement("div");
+                header.className = "item-card-header";
+
+                const title = document.createElement("strong");
+                title.className = "item-card-title";
+                title.textContent = item.title || `Occurrence #${index + 1}`;
+
+                const loc = document.createElement("span");
+                loc.className = "item-card-location";
+                loc.textContent = item.location || "DOM Element";
+
+                header.appendChild(title);
+                header.appendChild(loc);
+                card.appendChild(header);
+
+                // --- SOURCE & LOCATION INFO BOX (PAGE, FILE, DOM PATH) ---
+                const itemPageUrl = item.pageUrl || pageUrl || "Current Webpage";
+                let itemFileName = item.fileName;
+                const itemSourceUrl = item.sourceUrl || (item.preview && item.preview.startsWith("http") ? item.preview : null);
+
+                if (!itemFileName) {
+                    if (itemSourceUrl && itemSourceUrl.startsWith("http")) {
+                        itemFileName = extractFileNameFromUrl(itemSourceUrl, "resource.js");
+                    } else {
+                        itemFileName = `Inline in HTML (${extractFileNameFromUrl(itemPageUrl, "index.html")})`;
+                    }
+                }
+
+                const sourceBox = document.createElement("div");
+                sourceBox.className = "item-source-box";
+
+                // Row 1: Page URL
+                const pageRow = document.createElement("div");
+                pageRow.className = "source-row";
+                const pageBadge = document.createElement("span");
+                pageBadge.className = "source-badge badge-page";
+                pageBadge.textContent = "🌐 Page URL";
+                const pageVal = document.createElement("span");
+                pageVal.className = "source-value";
+                pageVal.textContent = itemPageUrl;
+                pageVal.title = itemPageUrl;
+                pageRow.appendChild(pageBadge);
+                pageRow.appendChild(pageVal);
+                sourceBox.appendChild(pageRow);
+
+                // Row 2: File Name & Source URL
+                const fileRow = document.createElement("div");
+                fileRow.className = "source-row";
+                const fileBadge = document.createElement("span");
+                fileBadge.className = "source-badge badge-file";
+                fileBadge.textContent = "📄 File Name";
+                const fileVal = document.createElement("span");
+                fileVal.className = "source-value";
+                const fileNameStrong = document.createElement("strong");
+                fileNameStrong.className = "file-name-highlight";
+                fileNameStrong.textContent = itemFileName;
+                fileVal.appendChild(fileNameStrong);
+
+                if (itemSourceUrl && itemSourceUrl !== itemPageUrl && itemSourceUrl.startsWith("http")) {
+                    const fileUrlSpan = document.createElement("span");
+                    fileUrlSpan.className = "file-source-url";
+                    fileUrlSpan.textContent = ` (${itemSourceUrl})`;
+                    fileUrlSpan.title = itemSourceUrl;
+                    fileVal.appendChild(fileUrlSpan);
+                } else {
+                    const inlineSpan = document.createElement("span");
+                    inlineSpan.className = "file-source-url";
+                    inlineSpan.textContent = " (Inside Page Document)";
+                    fileVal.appendChild(inlineSpan);
+                }
+                fileRow.appendChild(fileBadge);
+                fileRow.appendChild(fileVal);
+                sourceBox.appendChild(fileRow);
+
+                // Row 3: DOM Path / Code Selector
+                if (item.domPath) {
+                    const domRow = document.createElement("div");
+                    domRow.className = "source-row";
+                    const domBadge = document.createElement("span");
+                    domBadge.className = "source-badge badge-dom";
+                    domBadge.textContent = "🎯 DOM Path";
+                    const domVal = document.createElement("code");
+                    domVal.className = "source-dom-path";
+                    domVal.textContent = item.domPath;
+                    domVal.title = item.domPath;
+                    domRow.appendChild(domBadge);
+                    domRow.appendChild(domVal);
+                    sourceBox.appendChild(domRow);
+                }
+
+                card.appendChild(sourceBox);
+
+                // Code Snippet Preview
+                if (item.preview) {
+                    const preview = document.createElement("pre");
+                    preview.className = "item-card-preview";
+                    const code = document.createElement("code");
+                    code.textContent = item.preview;
+                    preview.appendChild(code);
+                    card.appendChild(preview);
+                }
+
+                // Detail / Notes
+                if (item.detail || item.type) {
+                    const detail = document.createElement("div");
+                    detail.className = "item-card-detail";
+                    detail.textContent = item.detail
+                        ? `${item.type ? `[${item.type}] ` : ""}${item.detail}`
+                        : `Type: ${item.type}`;
+                    card.appendChild(detail);
+                }
+
+                modalItemsContainer.appendChild(card);
+            });
+        } else {
+            // General or single instance fallback
+            const card = document.createElement("div");
+            card.className = "modal-item-card";
+
+            const header = document.createElement("div");
+            header.className = "item-card-header";
+
+            const title = document.createElement("strong");
+            title.className = "item-card-title";
+            title.textContent = finding.reason || "Security Indicator Detected";
+
+            const loc = document.createElement("span");
+            loc.className = "item-card-location";
+            loc.textContent = `Type: ${type}`;
+
+            header.appendChild(title);
+            header.appendChild(loc);
+            card.appendChild(header);
+
+            // Source box for general finding
+            const sourceBox = document.createElement("div");
+            sourceBox.className = "item-source-box";
+
+            const pageRow = document.createElement("div");
+            pageRow.className = "source-row";
+            const pageBadge = document.createElement("span");
+            pageBadge.className = "source-badge badge-page";
+            pageBadge.textContent = "🌐 Page URL";
+            const pageVal = document.createElement("span");
+            pageVal.className = "source-value";
+            pageVal.textContent = pageUrl || "Current Webpage";
+            pageRow.appendChild(pageBadge);
+            pageRow.appendChild(pageVal);
+            sourceBox.appendChild(pageRow);
+
+            const fileRow = document.createElement("div");
+            fileRow.className = "source-row";
+            const fileBadge = document.createElement("span");
+            fileBadge.className = "source-badge badge-file";
+            fileBadge.textContent = "📄 File Name";
+            const fileVal = document.createElement("span");
+            fileVal.className = "source-value";
+            const fileNameStrong = document.createElement("strong");
+            fileNameStrong.className = "file-name-highlight";
+            fileNameStrong.textContent = extractFileNameFromUrl(pageUrl, "index.html");
+            fileVal.appendChild(fileNameStrong);
+            fileRow.appendChild(fileBadge);
+            fileRow.appendChild(fileVal);
+            sourceBox.appendChild(fileRow);
+
+            card.appendChild(sourceBox);
+
+            const detail = document.createElement("div");
+            detail.className = "item-card-detail";
+            detail.textContent = `Category: ${category} | Status: Detected on current page`;
+            card.appendChild(detail);
+
+            modalItemsContainer.appendChild(card);
+        }
+    }
+
+    // Risk Explanation
+    const modalRiskExplanation = document.getElementById("modalRiskExplanation");
+    if (modalRiskExplanation) {
+        modalRiskExplanation.textContent =
+            finding.details?.riskExplanation || kb.riskExplanation;
+    }
+
+    // Solution Guide
+    const modalSolutionText = document.getElementById("modalSolutionText");
+    if (modalSolutionText) {
+        modalSolutionText.textContent =
+            finding.details?.solution || kb.solution;
+    }
+
+    // Open Modal
+    modalOverlay.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+}
 
 // ==================================
 // MAIN DASHBOARD DATA RENDERER
@@ -118,6 +969,8 @@ updateAiAndLocalStatus();
 
 function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     const isRestricted = isRestrictedUrl(pageUrl);
+    const safeScan = scan || {};
+    const safeExtensionScan = Array.isArray(extensionScan) ? extensionScan : [];
 
     // ----------------------------------
     // WEBSITE URL
@@ -131,11 +984,11 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     // OVERVIEW
     // ----------------------------------
     const calculatedRisk =
-        scan?.risk?.level ||
+        safeScan?.risk?.level ||
         (isRestricted ? "SAFE" : "SAFE");
 
     const finalOverallRisk =
-        scan?.overallRisk ||
+        safeScan?.overallRisk ||
         calculatedRisk;
 
     const overallRiskElement = document.getElementById("overallRisk");
@@ -178,8 +1031,8 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     // ----------------------------------
     const phishingStatusElement = document.getElementById("phishingStatus");
     if (phishingStatusElement) {
-        if (scan?.phishingRisk) {
-            phishingStatusElement.textContent = scan.phishingRisk.risk;
+        if (safeScan?.phishingRisk) {
+            phishingStatusElement.textContent = safeScan.phishingRisk.risk;
         } else {
             phishingStatusElement.textContent = isRestricted ? "N/A (System Page)" : "LOW";
         }
@@ -188,7 +1041,7 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     // ----------------------------------
     // PROMPT INJECTION
     // ----------------------------------
-    const promptFindings = (scan?.promptInjectionFindings || []).filter(
+    const promptFindings = (safeScan?.promptInjectionFindings || []).filter(
         (f) => !informationalTypes.includes(f.type)
     );
     const promptInjectionDetected = promptFindings.some(
@@ -207,11 +1060,11 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     // ----------------------------------
     const extensionCountElement = document.getElementById("extensionCount");
     if (extensionCountElement) {
-        extensionCountElement.textContent = extensionScan.length;
+        extensionCountElement.textContent = safeExtensionScan.length;
     }
 
     let totalPermissions = 0;
-    extensionScan.forEach((extension) => {
+    safeExtensionScan.forEach((extension) => {
         totalPermissions += (extension.permissions || []).length;
     });
 
@@ -220,10 +1073,10 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
         permissionCountElement.textContent = totalPermissions;
     }
 
-    const hasHighRiskExtension = extensionScan.some(
+    const hasHighRiskExtension = safeExtensionScan.some(
         (ext) => ext.risk === "HIGH"
     );
-    const hasMediumRiskExtension = extensionScan.some(
+    const hasMediumRiskExtension = safeExtensionScan.some(
         (ext) => ext.risk === "MEDIUM"
     );
 
@@ -246,7 +1099,7 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     }
 
     let extensionFindingCount = 0;
-    extensionScan.forEach((extension) => {
+    safeExtensionScan.forEach((extension) => {
         extensionFindingCount += (extension.findings || []).length;
     });
 
@@ -266,13 +1119,13 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     if (extensionFindingsContainer) {
         extensionFindingsContainer.replaceChildren();
 
-        if (extensionScan.length === 0) {
+        if (safeExtensionScan.length === 0) {
             extensionFindingsContainer.textContent =
                 "No installed extensions found.";
         } else {
             const fragment = document.createDocumentFragment();
 
-            extensionScan.forEach((extension) => {
+            safeExtensionScan.forEach((extension) => {
                 const extensionCard = document.createElement("div");
                 extensionCard.className = "extension-finding-card";
 
@@ -323,21 +1176,21 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     }
 
     // ----------------------------------
-    // WEBSITE SECURITY FINDINGS (Actual Security Indicators Only)
+    // WEBSITE SECURITY FINDINGS (Interactive Cards + Details Button)
     // ----------------------------------
-    const urlFindings = (scan?.urlFindings || []).filter(
+    const urlFindings = (safeScan?.urlFindings || []).filter(
         (f) => !informationalTypes.includes(f.type)
     );
-    const domFindings = (scan?.domFindings || []).filter(
+    const domFindings = (safeScan?.domFindings || []).filter(
         (f) => !informationalTypes.includes(f.type)
     );
-    const formFindings = (scan?.formFindings || []).filter(
+    const formFindings = (safeScan?.formFindings || []).filter(
         (f) => !informationalTypes.includes(f.type)
     );
-    const scriptIframeFindings = (scan?.scriptIframeFindings || []).filter(
+    const scriptIframeFindings = (safeScan?.scriptIframeFindings || []).filter(
         (f) => !informationalTypes.includes(f.type)
     );
-    const sensitiveDataFindings = (scan?.sensitiveDataFindings || []).filter(
+    const sensitiveDataFindings = (safeScan?.sensitiveDataFindings || []).filter(
         (f) => !informationalTypes.includes(f.type)
     );
 
@@ -360,23 +1213,48 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
         findingsContainer.replaceChildren();
 
         if (findings.length === 0) {
-            findingsContainer.textContent = "No security findings detected. Website appears safe.";
+            const emptyNotice = document.createElement("div");
+            emptyNotice.className = "finding-empty-state";
+            emptyNotice.textContent = "No security findings detected. Website appears safe.";
+            findingsContainer.appendChild(emptyNotice);
         } else {
-            findings.forEach((finding) => {
-                const item = document.createElement("div");
-                item.className = "finding-item";
+            findings.forEach((finding, idx) => {
+                const card = document.createElement("div");
+                const severity = (finding.severity || "LOW").toUpperCase();
+                card.className = `finding-card severity-${severity.toLowerCase()}`;
 
-                const severity = document.createElement("strong");
-                severity.textContent = finding.severity || "LOW";
+                const leftCol = document.createElement("div");
+                leftCol.className = "finding-card-left";
+
+                const badge = document.createElement("span");
+                badge.className = `finding-badge badge-${severity.toLowerCase()}`;
+                badge.textContent = severity;
+
+                const categoryTag = document.createElement("span");
+                categoryTag.className = "finding-category-tag";
+                categoryTag.textContent = finding.category || "SECURITY";
 
                 const reason = document.createElement("span");
+                reason.className = "finding-reason-text";
                 reason.textContent = finding.reason || "No reason provided";
 
-                item.appendChild(severity);
-                item.appendChild(document.createTextNode(" "));
-                item.appendChild(reason);
+                leftCol.appendChild(badge);
+                leftCol.appendChild(categoryTag);
+                leftCol.appendChild(reason);
 
-                findingsContainer.appendChild(item);
+                const detailBtn = document.createElement("button");
+                detailBtn.className = "finding-detail-btn";
+                detailBtn.type = "button";
+                detailBtn.setAttribute("data-index", idx);
+                detailBtn.innerHTML = `<span>View Details</span> <span class="arrow">&rarr;</span>`;
+                detailBtn.addEventListener("click", () => {
+                    openFindingModal(finding, pageUrl);
+                });
+
+                card.appendChild(leftCol);
+                card.appendChild(detailBtn);
+
+                findingsContainer.appendChild(card);
             });
         }
     }
@@ -386,77 +1264,57 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     // ----------------------------------
     const aiSummaryElement = document.getElementById("aiSummary");
     const aiWhyElement = document.getElementById("aiWhy");
-    const aiRecommendationsElement = document.getElementById(
-        "aiRecommendations"
-    );
+    const aiRecommendationsElement = document.getElementById("aiRecommendations");
     const aiUserMessageElement = document.getElementById("aiUserMessage");
 
-    if (aiAnalysis && aiAnalysis.success && aiAnalysis.analysis) {
-        const analysis = aiAnalysis.analysis;
+    const analysis = aiAnalysis?.analysis || (aiAnalysis?.summary ? aiAnalysis : null);
 
-        if (aiSummaryElement) {
-            aiSummaryElement.textContent =
-                analysis.summary || "No AI summary available.";
-        }
-
-        if (aiWhyElement) {
-            aiWhyElement.replaceChildren();
-            const why = Array.isArray(analysis.why) ? analysis.why : [];
-            if (why.length === 0) {
-                aiWhyElement.textContent =
-                    "No additional explanation available.";
-            } else {
-                why.forEach((reason) => {
-                    const item = document.createElement("div");
-                    item.textContent = "• " + reason;
-                    aiWhyElement.appendChild(item);
-                });
+    if (analysis && (analysis.summary || analysis.why || analysis.recommendations)) {
+        const renderFn = (typeof renderAiAnalysis === "function") 
+            ? renderAiAnalysis 
+            : (typeof window !== "undefined" && typeof window.renderAiAnalysis === "function" ? window.renderAiAnalysis : null);
+        if (renderFn) {
+            try {
+                renderFn(analysis);
+            } catch (e) {
+                console.error("ThreatLens: Error in renderAiAnalysis:", e);
             }
-        }
-
-        if (aiRecommendationsElement) {
-            aiRecommendationsElement.replaceChildren();
-            const recommendations = Array.isArray(analysis.recommendations)
-                ? analysis.recommendations
-                : [];
-            if (recommendations.length === 0) {
-                aiRecommendationsElement.textContent =
-                    "No specific recommendations available.";
-            } else {
-                recommendations.forEach((rec) => {
-                    const item = document.createElement("div");
-                    const priority = rec.priority || "INFO";
-                    const action = rec.action || "No action provided";
-                    item.textContent = `• ${priority}: ${action}`;
-                    aiRecommendationsElement.appendChild(item);
-                });
-            }
-        }
-
-        if (aiUserMessageElement) {
-            aiUserMessageElement.textContent =
-                analysis.user_message || "No additional message available.";
-        }
-    } else if (aiAnalysis && aiAnalysis.success === false) {
-        if (aiSummaryElement) {
-            aiSummaryElement.textContent =
-                "AI analysis is temporarily unavailable. Local security analysis is still active.";
-        }
-        if (aiWhyElement) aiWhyElement.textContent = "";
-        if (aiRecommendationsElement) aiRecommendationsElement.textContent = "";
-        if (aiUserMessageElement) {
-            aiUserMessageElement.textContent =
-                "You can continue using SentinelAI. Core security detection does not depend on AI.";
         }
     } else {
         if (aiSummaryElement) {
             aiSummaryElement.textContent = isRestricted
                 ? "AI analysis is not applicable for browser internal pages."
-                : "AI analysis is not available for this scan.";
+                : "🛡️ 100% Offline Local Engine Active (Zero Cloud Exposure). All DOM, Script, and Form checks were completed inside your browser. No browsing data, HTML, or credentials were sent to the cloud.";
         }
-        if (aiWhyElement) aiWhyElement.textContent = "AI explanation will appear here.";
-        if (aiRecommendationsElement) aiRecommendationsElement.textContent = "AI recommendations will appear here.";
-        if (aiUserMessageElement) aiUserMessageElement.textContent = "Continue browsing normally.";
+        if (aiWhyElement) {
+            aiWhyElement.replaceChildren();
+            const w1 = document.createElement("div");
+            w1.textContent = "• Privacy-First Security: Core threat detection never depends on third-party cloud servers.";
+            const w2 = document.createElement("div");
+            w2.textContent = "• Zero Data Leakage: Your browsing activity and DOM structures remain strictly private.";
+            aiWhyElement.appendChild(w1);
+            aiWhyElement.appendChild(w2);
+        }
+        if (aiRecommendationsElement) {
+            aiRecommendationsElement.replaceChildren();
+            const r1 = document.createElement("div");
+            r1.textContent = "• Review local findings above: You can inspect individual code occurrences and file sources.";
+            const r2 = document.createElement("div");
+            r2.textContent = "• AI Neural Assistant: Click '✦ Analyze with AI' above for real-time threat interpretation.";
+            aiRecommendationsElement.appendChild(r1);
+            aiRecommendationsElement.appendChild(r2);
+        }
+        if (aiUserMessageElement) {
+            aiUserMessageElement.textContent = "Protected by ThreatLens local ocular engine. Zero cloud exposure.";
+        }
+        const aiLaymanElement = document.getElementById("aiLaymanExplanation");
+        if (aiLaymanElement) {
+            aiLaymanElement.textContent = "A simple breakdown of how these security findings affect you in everyday life will appear here after analysis.";
+        }
+        const aiDataAtRiskWrapper = document.getElementById("aiDataAtRiskWrapper");
+        if (aiDataAtRiskWrapper) {
+            aiDataAtRiskWrapper.style.display = "none";
+        }
     }
 }
 
@@ -467,6 +1325,7 @@ function loadDashboardData() {
             "lastScan",
             "extensionScan",
             tabId ? `ai_analysis_${tabId}` : null,
+            "latest_ai_analysis",
             "privacyMode"
         ].filter(Boolean),
         (result) => {
@@ -485,7 +1344,7 @@ function loadDashboardData() {
 
             const extensionScan = result.extensionScan || [];
             const aiAnalysis =
-                (tabId ? result[`ai_analysis_${tabId}`] : null) || null;
+                (tabId ? result[`ai_analysis_${tabId}`] : null) || result.latest_ai_analysis || null;
             const pageUrl = currentWebsite || scan?.url || "Unknown";
 
             // If no scan exists for this specific website yet, request live scan from tab content script
@@ -535,10 +1394,26 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
             (tabId && changes[`scan_${tabId}`]) ||
             changes.lastScan ||
             (tabId && changes[`ai_analysis_${tabId}`]) ||
+            changes.latest_ai_analysis ||
             changes.extensionScan
         ) {
-            console.log("SentinelAI: Storage updated, re-rendering dashboard");
+            console.log("ThreatLens: Storage updated, re-rendering dashboard");
             loadDashboardData();
         }
     }
 });
+
+// Copy AI Dev Code Button
+const copyAiCodeBtn = document.getElementById("copyAiCodeBtn");
+if (copyAiCodeBtn) {
+    copyAiCodeBtn.addEventListener("click", () => {
+        const codeEl = document.getElementById("aiDevCodeSnippet");
+        if (codeEl && codeEl.textContent) {
+            navigator.clipboard.writeText(codeEl.textContent).then(() => {
+                const orig = copyAiCodeBtn.textContent;
+                copyAiCodeBtn.textContent = "✅ Copied!";
+                setTimeout(() => copyAiCodeBtn.textContent = orig, 2000);
+            });
+        }
+    });
+}

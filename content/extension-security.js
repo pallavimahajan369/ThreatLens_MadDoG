@@ -1,4 +1,4 @@
-console.log("SentinelAI Extension Security Engine loaded");
+console.log("ThreatLens Extension Security Engine loaded");
 
 
 function analyzeExtensionSecurity(extension) {

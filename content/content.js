@@ -22,7 +22,7 @@ function scanPage(reason = "page-load") {
         try {
             urlFindings = analyzeURL(currentURL);
         } catch (e) {
-            console.error("SentinelAI: analyzeURL error:", e);
+            console.error("ThreatLens: analyzeURL error:", e);
         }
         result.urlFindings = urlFindings;
 
@@ -33,7 +33,7 @@ function scanPage(reason = "page-load") {
         try {
             domFindings = analyzeDOM();
         } catch (e) {
-            console.error("SentinelAI: analyzeDOM error:", e);
+            console.error("ThreatLens: analyzeDOM error:", e);
         }
         result.domFindings = domFindings;
 
@@ -44,7 +44,7 @@ function scanPage(reason = "page-load") {
         try {
             formFindings = analyzeFormSecurity();
         } catch (e) {
-            console.error("SentinelAI: analyzeFormSecurity error:", e);
+            console.error("ThreatLens: analyzeFormSecurity error:", e);
         }
         result.formFindings = formFindings;
 
@@ -55,7 +55,7 @@ function scanPage(reason = "page-load") {
         try {
             scriptIframeFindings = analyzeScriptIframeSecurity();
         } catch (e) {
-            console.error("SentinelAI: analyzeScriptIframeSecurity error:", e);
+            console.error("ThreatLens: analyzeScriptIframeSecurity error:", e);
         }
         result.scriptIframeFindings = scriptIframeFindings;
 
@@ -66,7 +66,7 @@ function scanPage(reason = "page-load") {
         try {
             sensitiveDataFindings = analyzeSensitiveData();
         } catch (e) {
-            console.error("SentinelAI: analyzeSensitiveData error:", e);
+            console.error("ThreatLens: analyzeSensitiveData error:", e);
         }
         result.sensitiveDataFindings = sensitiveDataFindings;
 
@@ -77,7 +77,7 @@ function scanPage(reason = "page-load") {
         try {
             promptInjectionFindings = analyzePromptInjection();
         } catch (e) {
-            console.error("SentinelAI: analyzePromptInjection error:", e);
+            console.error("ThreatLens: analyzePromptInjection error:", e);
         }
         result.promptInjectionFindings = promptInjectionFindings;
 
@@ -93,7 +93,7 @@ function scanPage(reason = "page-load") {
                 scriptIframeFindings
             );
         } catch (e) {
-            console.error("SentinelAI: analyzePhishingRisk error:", e);
+            console.error("ThreatLens: analyzePhishingRisk error:", e);
         }
         result.phishingRisk = phishingRisk;
 
@@ -113,11 +113,15 @@ function scanPage(reason = "page-load") {
         try {
             riskResult = calculateOverallRisk(allFindings);
         } catch (e) {
-            console.error("SentinelAI: calculateOverallRisk error:", e);
+            console.error("ThreatLens: calculateOverallRisk error:", e);
         }
         result.risk = riskResult;
 
-        console.log("SentinelAI Scan Result:", result);
+        console.log("ThreatLens Scan Result:", result);
+
+        if (!chrome.runtime?.id) {
+            return result;
+        }
 
         try {
             chrome.runtime.sendMessage(
@@ -128,31 +132,31 @@ function scanPage(reason = "page-load") {
                 (response) => {
                     if (chrome.runtime.lastError) {
                         console.warn(
-                            "SentinelAI: Message delivery:",
+                            "ThreatLens: Message delivery:",
                             chrome.runtime.lastError.message
                         );
                         return;
                     }
                     console.log(
-                        "SentinelAI: Service Worker response:",
+                        "ThreatLens: Service Worker response:",
                         response
                     );
                 }
             );
         } catch (msgErr) {
-            console.warn("SentinelAI: Failed to send SCAN_RESULT:", msgErr.message);
+            console.warn("ThreatLens: Failed to send SCAN_RESULT:", msgErr.message);
         }
 
         return result;
     } catch (err) {
-        console.error("SentinelAI: scanPage critical error:", err);
+        console.error("ThreatLens: scanPage critical error:", err);
     }
 }
 
 // Listen for on-demand scan requests (from popup or dashboard)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request && (request.action === "REQUEST_SCAN" || request.type === "REQUEST_SCAN")) {
-        console.log("SentinelAI: Handling on-demand REQUEST_SCAN");
+        console.log("ThreatLens: Handling on-demand REQUEST_SCAN");
         const res = scanPage("on-demand");
         sendResponse({ success: true, data: res });
         return true;
@@ -234,7 +238,7 @@ const domObserver =
             scanScheduled = true;
 
             console.log(
-                "SentinelAI: Relevant DOM mutation detected. Re-scanning..."
+                "ThreatLens: Relevant DOM mutation detected. Re-scanning..."
             );
 
             scanPage("dom-mutation");
@@ -255,6 +259,6 @@ if (document.documentElement) {
     );
 
     console.log(
-        "SentinelAI: MutationObserver started"
+        "ThreatLens: MutationObserver started"
     );
 }

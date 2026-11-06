@@ -1,7 +1,7 @@
 
 <div align="center">
 
-# 🛡️ TreatLens
+# 🛡️ ThreatLens
 
 ### Your Browser. Your Privacy. Smarter Security.
 
@@ -19,7 +19,7 @@
 
 ## 🔍 Overview
 
-TreatLens is a Chrome browser security extension designed to analyze potentially suspicious website behavior and provide understandable security findings.
+ThreatLens is a Chrome browser security extension designed to analyze potentially suspicious website behavior and provide understandable security findings.
 
 It combines rule-based browser analysis with an optional AI-assisted explanation workflow, helping users explore website risks, browser extension permissions, and privacy-related indicators.
 
@@ -42,7 +42,7 @@ It combines rule-based browser analysis with an optional AI-assisted explanation
 
 ## 🔒 Privacy by Design
 
-Privacy is an important part of TreatLens.
+Privacy is an important part of ThreatLens.
 
 - **Local analysis:** Rule-based checks run within the browser extension.
 - **Privacy Mode:** When enabled, the background service worker skips AI analysis requests.
@@ -60,7 +60,7 @@ Never commit API keys, credentials, cookies, or real sensitive data to this repo
                 |
                 v
       +---------------------+
-      |   TreatLens Popup   |
+      |   ThreatLens Popup   |
       +---------------------+
                 |
                 v
@@ -154,7 +154,7 @@ cd ThreatLens_MadDoG
 2. Enable **Developer mode**.
 3. Select **Load unpacked**.
 4. Choose the project folder containing `manifest.json`.
-5. Open the TreatLens extension from the Chrome toolbar.
+5. Open the ThreatLens extension from the Chrome toolbar.
 
 ### 3. Optional: Configure the AI backend
 
@@ -208,7 +208,7 @@ Recommended screenshots:
 
 ## ⚠️ Disclaimer
 
-TreatLens is an educational security project. It does not guarantee detection of every malicious website, phishing attempt, or prompt injection. Do not use it as the sole basis for security decisions.
+ThreatLens is an educational security project. It does not guarantee detection of every malicious website, phishing attempt, or prompt injection. Do not use it as the sole basis for security decisions.
 
 ## 👩‍💻 Author
 

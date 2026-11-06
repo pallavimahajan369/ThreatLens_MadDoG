@@ -1,4 +1,4 @@
-console.log("SentinelAI Popup script loaded");
+console.log("ThreatLens Popup script loaded");
 
 const informationalTypes = [
     "NO_SUSPICIOUS_DOM_PATTERN",
@@ -212,15 +212,13 @@ document.addEventListener("DOMContentLoaded", () => {
                         /*
                          * AI status
                          */
-                        const aiEnabled = result.aiEnabled === true;
-                        const aiConsent = result.aiConsent === true;
-                        const aiIsActive = aiEnabled && aiConsent;
+                        const hasGeminiKey = !!result.geminiApiKey?.trim();
 
                         if (aiStatusElement) {
                             aiStatusElement.textContent =
-                                aiIsActive ? "ON" : "OFF";
+                                hasGeminiKey ? "READY" : "OFFLINE";
                             aiStatusElement.className =
-                                aiIsActive ? "enabled" : "disabled";
+                                hasGeminiKey ? "enabled" : "disabled";
                         }
 
                         /*
