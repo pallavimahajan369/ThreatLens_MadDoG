@@ -6,7 +6,8 @@ const informationalTypes = [
     "NO_SUSPICIOUS_SCRIPT_IFRAME_PATTERN",
     "NO_SENSITIVE_DATA",
     "NO_PROMPT_INJECTION",
-    "NO_SUSPICIOUS_URL_PATTERN"
+    "NO_SUSPICIOUS_URL_PATTERN",
+    "NO_WEB_VULNERABILITY"
 ];
 
 function isRestrictedUrl(url) {
@@ -180,6 +181,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             ...(scan?.formFindings || []),
                             ...(scan?.scriptIframeFindings || []),
                             ...(scan?.sensitiveDataFindings || []),
+                            ...(scan?.webVulnerabilityFindings || []),
                             ...(scan?.promptInjectionFindings || [])
                         ];
 

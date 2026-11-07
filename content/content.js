@@ -71,6 +71,19 @@ function scanPage(reason = "page-load") {
         result.sensitiveDataFindings = sensitiveDataFindings;
 
         // ===============================
+        // WEB VULNERABILITY SECURITY (SQLi, XSS, EXEC, LFI)
+        // ===============================
+        let webVulnerabilityFindings = [];
+        try {
+            if (typeof analyzeWebVulnerabilities === "function") {
+                webVulnerabilityFindings = analyzeWebVulnerabilities();
+            }
+        } catch (e) {
+            console.error("ThreatLens: analyzeWebVulnerabilities error:", e);
+        }
+        result.webVulnerabilityFindings = webVulnerabilityFindings;
+
+        // ===============================
         // PROMPT INJECTION SECURITY
         // ===============================
         let promptInjectionFindings = [];
@@ -101,6 +114,7 @@ function scanPage(reason = "page-load") {
         // RISK ENGINE
         // ===============================
         const allFindings = [
+            ...normalizeFindings(webVulnerabilityFindings, "WEB_VULNERABILITY"),
             ...normalizeFindings(urlFindings, "URL"),
             ...normalizeFindings(domFindings, "DOM"),
             ...normalizeFindings(formFindings, "FORM"),

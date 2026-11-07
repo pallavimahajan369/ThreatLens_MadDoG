@@ -33,7 +33,8 @@ const informationalTypes = [
     "NO_SUSPICIOUS_SCRIPT_IFRAME_PATTERN",
     "NO_SENSITIVE_DATA",
     "NO_PROMPT_INJECTION",
-    "NO_SUSPICIOUS_URL_PATTERN"
+    "NO_SUSPICIOUS_URL_PATTERN",
+    "NO_WEB_VULNERABILITY"
 ];
 
 const severityWeight = {
@@ -225,6 +226,39 @@ function applyCorrelationRules(findings) {
 
     }
 
+
+        // =====================================
+    // RULE 6 — SQL Injection Endpoint + Form
+    // =====================================
+    const sqliEndpoint =
+        hasFinding(
+            "WEB_VULNERABILITY",
+            "SQL_INJECTION_ENDPOINT"
+        );
+
+    const sqliForm =
+        hasFinding(
+            "WEB_VULNERABILITY",
+            "POTENTIAL_SQL_INJECTION_FORM"
+        );
+
+    const sqliDbError =
+        hasFinding(
+            "WEB_VULNERABILITY",
+            "SQL_INJECTION_ERROR"
+        );
+
+    if (sqliEndpoint && sqliForm) {
+        correlationReasons.push(
+            "SQL Injection vulnerable endpoint combined with interactive query form input"
+        );
+    }
+
+    if (sqliDbError) {
+        correlationReasons.push(
+            "Active database error disclosure confirming SQL injection vulnerability"
+        );
+    }
 
     return correlationReasons;
 

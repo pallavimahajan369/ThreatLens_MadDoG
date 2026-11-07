@@ -112,6 +112,7 @@ function buildAISecurityPayload(scan) {
     } catch (e) {}
 
     const findings = [
+        ...(Array.isArray(source.webVulnerabilityFindings) ? source.webVulnerabilityFindings : []),
         ...(Array.isArray(source.urlFindings) ? source.urlFindings : []),
         ...(Array.isArray(source.domFindings) ? source.domFindings : []),
         ...(Array.isArray(source.formFindings) ? source.formFindings : []),

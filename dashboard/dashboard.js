@@ -68,6 +68,41 @@ function escapeHtml(text) {
 // COMPREHENSIVE FINDINGS KNOWLEDGE BASE
 // ==================================
 const findingKnowledgeBase = {
+    SQL_INJECTION_ENDPOINT: {
+        title: "SQL Injection Target Endpoint Detected",
+        riskExplanation: "The current URL matches a known SQL Injection target endpoint (/vulnerabilities/sqli/ or similar). These endpoints typically execute backend SQL queries with parameters from input forms without sanitization, allowing attackers to access unauthorized database records, bypass authentication, or dump user tables.",
+        solution: "1. Never concatenate dynamic user parameters into SQL query strings.\n2. Use Parameterized Prepared Statements (PDO in PHP, PreparedStatement in Java/Node).\n3. Enforce strict input validation, type casting (e.g. (int)$_GET['id']), and least-privilege database user permissions."
+    },
+    POTENTIAL_SQL_INJECTION_FORM: {
+        title: "Form Susceptible to SQL Injection",
+        riskExplanation: "The page contains an interactive form that transmits database query identifiers (such as 'id' or 'query') via the GET method without input validation or type constraints. An attacker can submit SQL metacharacters (such as ' OR 1=1 --) to extract database contents or hijack administrative accounts.",
+        solution: "1. Enforce Parameterized Queries on all server-side query endpoints.\n2. Convert data retrieval forms to use POST with CSRF tokens where appropriate.\n3. Add HTML5 input validation patterns and numerical type constraints."
+    },
+    SQL_INJECTION_ERROR: {
+        title: "Database Error Signature Detected in DOM",
+        riskExplanation: "The webpage rendered a visible SQL database error message (e.g. MySQL, PostgreSQL, MSSQL, SQLite syntax error). This indicates that backend SQL queries are failing due to malformed input, confirming an active Error-Based SQL Injection vulnerability.",
+        solution: "1. Disable database error display and verbose debugging in production environments (display_errors = Off).\n2. Log errors to secure server-side log files instead of returning them to the user.\n3. Implement parameterized prepared statements to eliminate SQL syntax anomalies."
+    },
+    SQL_INJECTION_PAYLOAD_URL: {
+        title: "SQL Injection Payload Detected in URL",
+        riskExplanation: "The URL query parameters contain active SQL Injection attack patterns (e.g. UNION SELECT, boolean condition manipulation, or SQL comment characters).",
+        solution: "1. Use parameterized database queries to ensure user input cannot alter SQL syntax structure.\n2. Apply Web Application Firewall (WAF) inspection rules."
+    },
+    XSS_TARGET_ENDPOINT: {
+        title: "Cross-Site Scripting (XSS) Target Endpoint",
+        riskExplanation: "The current URL endpoint is identified as a Cross-Site Scripting target. Unsanitized input rendered on this page can execute arbitrary JavaScript in the user's browser session.",
+        solution: "1. Context-encode all dynamic values using htmlspecialchars(string, ENT_QUOTES, 'UTF-8').\n2. Enforce a strict Content Security Policy (CSP) header: script-src 'self'.\n3. Sanitize HTML using DOMPurify."
+    },
+    COMMAND_INJECTION_ENDPOINT: {
+        title: "OS Command Injection Endpoint Detected",
+        riskExplanation: "The page allows user input to be passed into operating system shell commands (e.g. ping/exec). Attackers can chain shell operators (;, &&, |) to execute arbitrary commands on the server.",
+        solution: "1. Avoid passing user input to system shell execution functions.\n2. Whitelist allowed inputs strictly (e.g. validate IP format with regex).\n3. Use parameterized process invocation without shell spawning."
+    },
+    FILE_INCLUSION_ENDPOINT: {
+        title: "File Inclusion / Path Traversal Endpoint",
+        riskExplanation: "The application passes file path parameters directly to file inclusion APIs (e.g. include, require). Attackers can traverse directories (../../) to read sensitive system files (e.g. /etc/passwd).",
+        solution: "1. Whitelist permitted file names explicitly.\n2. Disable allow_url_include in server configuration.\n3. Sanitize input to reject directory traversal characters (../)."
+    },
     INLINE_SCRIPT: {
         title: "Inline Script Execution Detected",
         riskExplanation: "Inline JavaScript runs directly inside HTML markup without origin or file isolation. If attacker-controlled input reaches the page, inline scripts can execute arbitrary JavaScript (Cross-Site Scripting / XSS), allowing attackers to steal session cookies, hijack user accounts, or redirect users to malicious websites.",
@@ -1178,6 +1213,9 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     // ----------------------------------
     // WEBSITE SECURITY FINDINGS (Interactive Cards + Details Button)
     // ----------------------------------
+    const webVulnerabilityFindings = (safeScan?.webVulnerabilityFindings || []).filter(
+        (f) => !informationalTypes.includes(f.type)
+    );
     const urlFindings = (safeScan?.urlFindings || []).filter(
         (f) => !informationalTypes.includes(f.type)
     );
@@ -1195,6 +1233,7 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     );
 
     const findings = [
+        ...webVulnerabilityFindings,
         ...urlFindings,
         ...domFindings,
         ...formFindings,
@@ -1207,6 +1246,17 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     if (urlFindingsElement) {
         urlFindingsElement.textContent = urlFindings.length;
     }
+
+    const webVulnCountElement = document.getElementById("webVulnCount");
+    if (webVulnCountElement) {
+        webVulnCountElement.textContent = webVulnerabilityFindings.length;
+        if (webVulnerabilityFindings.length > 0) {
+            webVulnCountElement.style.color = "#ef4444";
+        } else {
+            webVulnCountElement.style.color = "";
+        }
+    }
+
 
     const findingsContainer = document.getElementById("findingsContainer");
     if (findingsContainer) {
