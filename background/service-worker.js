@@ -1186,18 +1186,42 @@ function synthesizeLocalDeepExplanation(aiPayload) {
     const pageUrl = aiPayload?.pageUrl || "Current Webpage";
     const hostname = aiPayload?.hostname || "current website";
     const port = aiPayload?.port || "";
-    const pathname = aiPayload?.pathname || "";
+    const pathname = (aiPayload?.pathname || "").toLowerCase();
     const extensions = Array.isArray(aiPayload?.extensions) ? aiPayload.extensions : [];
 
-    const isSqli = pathname.includes("sqli") || pathname.includes("sql");
-    const isXss = pathname.includes("xss");
+    // Vulnerability classification flags
+    const isPhpCve = findings.some(f => f.type === "PHP_CGI_ARGUMENT_INJECTION" || f.type === "PHP_CONFIG_OR_VERSION_DISCLOSURE") ||
+                     pathname.includes("php-cgi") || pageUrl.includes("%ad") || pageUrl.includes("allow_url_include");
+    const isSsrf = findings.some(f => f.type === "POTENTIAL_SSRF_PARAMETER") ||
+                   pageUrl.includes("127.0.0.1") || pageUrl.includes("169.254.169.254");
+    const isPathTraversal = findings.some(f => f.type === "PATH_TRAVERSAL_PAYLOAD" || f.type === "FILE_INCLUSION_ENDPOINT") ||
+                            pathname.includes("/fi") || pageUrl.includes("page=include.php");
+    const isCmdInjection = findings.some(f => f.type === "COMMAND_INJECTION_ENDPOINT" || f.type === "COMMAND_INJECTION_PAYLOAD") ||
+                           pathname.includes("/exec");
+    const isSqli = pathname.includes("sqli") || pathname.includes("sql") ||
+                   findings.some(f => f.type && f.type.includes("SQL"));
+    const isXss = pathname.includes("xss") ||
+                  findings.some(f => f.type && (f.type.includes("XSS") || f.type === "DOM_XSS_SOURCE_SINK"));
+    const isMisconfig = findings.some(f => f.type === "DIRECTORY_LISTING_ENABLED" || f.type === "VERBOSE_ERROR_DISCLOSURE");
+    const isInsecurePass = findings.some(f => f.type === "INSECURE_PASSWORD_TRANSMISSION");
+    const isCsrf = findings.some(f => f.type === "MISSING_CSRF_PROTECTION");
 
     // 1. Data at risk
     const dataAtRisk = [];
-    if (isSqli) {
+    if (isPhpCve) {
+        dataAtRisk.push("Host Operating System Shell", "Server Environment Secrets", "Complete Application Code");
+    } else if (isSsrf) {
+        dataAtRisk.push("Internal Cloud Metadata (169.254.169.254)", "Internal Microservices", "Private Subnet Databases");
+    } else if (isPathTraversal) {
+        dataAtRisk.push("System Configuration Files (/etc/passwd)", "Database Secrets (.env)", "Source Code Files");
+    } else if (isCmdInjection) {
+        dataAtRisk.push("Host Operating System Shell", "Server Filesystem", "Network Interfaces");
+    } else if (isSqli) {
         dataAtRisk.push("Database User Records", "Account Credentials", "SQL Query Integrity");
     } else if (isXss) {
         dataAtRisk.push("Session Cookies", "DOM Authentication Tokens", "Keystrokes");
+    } else if (isInsecurePass) {
+        dataAtRisk.push("User Plaintext Passwords", "Account Authentication State");
     } else {
         if (port && port !== "80" && port !== "443") dataAtRisk.push("Exposed Network Services");
         if (findings.some(f => f.category === "FORM")) dataAtRisk.push("Form Submissions");
@@ -1211,32 +1235,41 @@ function synthesizeLocalDeepExplanation(aiPayload) {
     // Port location
     if (port && port !== "80" && port !== "443") {
         vulnerabilityLocations.push({
-            title: `📍 Non-Standard Port ${port}`,
-            location: `${hostname}:${port}`,
-            target: `Network Layer (Port ${port})`,
-            detail: `The website operates on non-standard port ${port} instead of standard HTTPS port 443, commonly seen in experimental test labs or development environments without production-grade protections.`
+            title: "📍 Non-Standard Port " + port,
+            location: hostname + ":" + port,
+            target: "Network Layer (Port " + port + ")",
+            detail: "The website operates on non-standard port " + port + " instead of standard HTTPS port 443, commonly seen in experimental test labs or development environments without production-grade protections."
         });
     }
 
-    // Findings location (Form / DOM / XSS / SQLi)
+    // Findings location (Web Vulnerability / Form / DOM)
     findings.forEach(f => {
-        if (f.type === "FORMS" || f.category === "FORM") {
+        if (f.category === "WEB_VULNERABILITY" && f.type !== "NO_WEB_VULNERABILITY") {
+            const loc = (f.details?.items && f.details.items[0]?.location) || f.location || (hostname + pathname);
+            const prev = (f.details?.items && f.details.items[0]?.preview) || f.preview || "";
+            vulnerabilityLocations.push({
+                title: "📍 " + (f.details?.title || f.reason || f.type),
+                location: loc,
+                target: f.details?.items && f.details.items[0]?.title ? f.details.items[0].title : "Web Application Element",
+                detail: f.reason || "High-severity web application vulnerability detected."
+            });
+        } else if (f.type === "FORMS" || f.category === "FORM") {
             const formLoc = f.location || "form:nth-of-type(1)";
             const preview = f.preview || "<form action='#' method='GET'>";
             vulnerabilityLocations.push({
                 title: isSqli ? "📍 SQL Injection Input Point" : "📍 Interactive HTML Form",
-                location: `Page Document > ${formLoc}`,
-                target: `DOM Element: ${preview}`,
+                location: "Page Document > " + formLoc,
+                target: "DOM Element: " + preview,
                 detail: isSqli 
                     ? "The form passes unsanitized user parameters directly into database queries, allowing attackers to manipulate database records."
                     : "The interactive form accepts input parameters that could expose data if submitted without encryption or anti-tampering tokens."
             });
-        } else if (f.type !== "UNUSUAL_PORT") {
+        } else if (f.type !== "UNUSUAL_PORT" && f.type !== "NO_WEB_VULNERABILITY") {
             vulnerabilityLocations.push({
-                title: `📍 ${f.reason || f.type}`,
-                location: f.location || `${hostname}${pathname}`,
-                target: `${f.category} Element`,
-                detail: f.preview ? `Code Snippet: ${f.preview}` : "Security engine flagged this element on the current page."
+                title: "📍 " + (f.reason || f.type),
+                location: f.location || (hostname + pathname),
+                target: f.category + " Element",
+                detail: f.preview ? "Code Snippet: " + f.preview : "Security engine flagged this element on the current page."
             });
         }
     });
@@ -1245,10 +1278,10 @@ function synthesizeLocalDeepExplanation(aiPayload) {
     extensions.forEach(ext => {
         if (ext.risk === "HIGH" || ext.risk === "MEDIUM") {
             vulnerabilityLocations.push({
-                title: `📍 Browser Extension: ${ext.name}`,
+                title: "📍 Browser Extension: " + ext.name,
                 location: "Chrome Browser Extension Environment",
-                target: `Permissions: ${(ext.permissions || []).join(", ") || "Elevated"}`,
-                detail: `This extension holds permissions to inspect web requests and browser cookies across visited origins.`
+                target: "Permissions: " + ((ext.permissions || []).join(", ") || "Elevated"),
+                detail: "This extension holds permissions to inspect web requests and browser cookies across visited origins."
             });
         }
     });
@@ -1264,27 +1297,55 @@ function synthesizeLocalDeepExplanation(aiPayload) {
 
     // 3. Layman Explanation with engaging real-world analogy (Pure English)
     let laymanExplanation = "";
-    if (isSqli) {
+    if (isPhpCve) {
+        laymanExplanation = "Imagine an automated door with an identity badge scanner programmed to reject any ID containing a hyphen ('-'). An intruder presents a special foreign letter (%ad - soft hyphen) that bypasses the scanner check, but inside the door's computer, it converts right back into an administrative command flag! The door is tricked into running master maintenance scripts that unlock the entire building (Remote Code Execution). This represents the recent critical PHP CGI argument injection vulnerability (CVE-2024-4577).";
+    } else if (isSsrf) {
+        laymanExplanation = "Imagine asking a company's courier to pick up a package from an outside store, but you give them the secret address of your company's own internal private vault instead! Because the courier is a trusted employee wearing an official badge, the internal vault guards let them right in! That is Server-Side Request Forgery (SSRF): tricking the server into retrieving data from internal databases, localhost, or cloud credentials.";
+    } else if (isPathTraversal) {
+        laymanExplanation = "Imagine an automated library robot that fetches public books when you give it an aisle number, but you tell it to go to 'Aisle 3/../../secret_director_office/passwords.txt'. If the robot does not check boundaries, it walks backwards right out of the public bookshelves and into the director's private filing cabinet! Path Traversal tricks the web server into leaking operating system files and passwords.";
+    } else if (isCmdInjection) {
+        laymanExplanation = "Imagine speaking into an automated restaurant drive-thru microphone, ordering a burger, and then immediately shouting '; open the cash register'. If the computer executes both instructions, the attacker steals the funds! In Command Injection, user input is passed directly into a server command prompt, allowing attackers to execute arbitrary system commands on the host.";
+    } else if (isSqli) {
         laymanExplanation = "Imagine visiting a bank teller where anyone can ask to view their account file. A normal customer asks for their own record, but a clever intruder writes 'OR 1=1' on the slip, tricking the teller into dumping every customer's private file onto the counter! That is what is happening here: the page accepts input without verifying it, allowing attackers to access unauthorized database records (SQL Injection).";
     } else if (isXss) {
         laymanExplanation = "Imagine someone sticking an invisible note on a public bulletin board with deceptive ink that rubs off on anyone who touches it and unlocks their backpack. In Cross-Site Scripting (XSS), an attacker injects untrusted code into the webpage that executes inside your browser, potentially stealing your login cookies or impersonating your session.";
+    } else if (isMisconfig) {
+        laymanExplanation = "Imagine walking up to an office building and finding the master architectural blueprints, server room access codes, and staff directory taped directly to the front entrance glass. That is Security Misconfiguration: leaving debugging modes, verbose error stack traces, or directory browsing turned on in production.";
     } else if (port && port !== "80" && port !== "443") {
-        laymanExplanation = `Imagine a shopping center with a secure main entrance (Port 443) guarded by security staff, but a rear delivery entrance (Port ${port}) has been left unlocked with no guards. Running services on non-standard ports often indicates temporary lab or development setups that lack hardened production certificates and security headers.`;
+        laymanExplanation = "Imagine a shopping center with a secure main entrance (Port 443) guarded by security staff, but a rear delivery entrance (Port " + port + ") has been left unlocked with no guards. Running services on non-standard ports often indicates temporary lab or development setups that lack hardened production certificates and security headers.";
     } else {
         laymanExplanation = "ThreatLens inspected all interactive forms, script sources, and browser extensions for this page. The site presents a stable baseline, though your installed browser extensions hold elevated privileges to monitor tab activity.";
     }
 
     // 4. Executive Summary (Pure English)
-    const summary = isSqli
-        ? `Website ${hostname} (port ${port || "4280"}) contains an interactive SQL injection vulnerability test form (/vulnerabilities/sqli/). Missing input validation leaves underlying database records exposed.`
-        : `Security assessment completed for ${hostname}. Overall environment risk is rated ${overallRisk} with ${vulnerabilityLocations.length} specific threat indicator(s) cataloged.`;
+    let summary = "";
+    if (isPhpCve) {
+        summary = "Critical PHP CGI Argument Injection flaw detected on " + hostname + ". Query parameters or server configurations allow attackers to execute arbitrary operating system commands (CVE-2024-4577 / RCE).";
+    } else if (isSsrf) {
+        summary = "Potential Server-Side Request Forgery (SSRF) endpoint detected on " + hostname + ". Parameters accept internal addresses that could expose private network services.";
+    } else if (isPathTraversal) {
+        summary = "Path Traversal / Local File Inclusion vulnerability detected on " + hostname + ". File parameters allow escaping public web directories to access internal system files.";
+    } else if (isCmdInjection) {
+        summary = "OS Command Injection vulnerability detected on " + hostname + ". Input is passed directly to server shell processes without adequate isolation.";
+    } else if (isSqli) {
+        summary = "Website " + hostname + " (port " + (port || "4280") + ") contains an interactive SQL injection vulnerability test form (/vulnerabilities/sqli/). Missing input validation leaves underlying database records exposed.";
+    } else {
+        summary = "Security assessment completed for " + hostname + ". Overall environment risk is rated " + overallRisk + " with " + vulnerabilityLocations.length + " specific threat indicator(s) cataloged.";
+    }
 
     // 5. How to solve (For You - User Steps in Pure English)
     const howToSolveUser = [];
-    if (isSqli) {
+    if (isPhpCve || isCmdInjection) {
+        howToSolveUser.push("Step 1: Do NOT submit real credentials, sensitive financial data, or personal information on this page.");
+        howToSolveUser.push("Step 2: If this is your server, patch PHP and web server configuration immediately to block argument injection.");
+        howToSolveUser.push("Step 3: Disconnect or restrict internet exposure of experimental or unhardened development instances.");
+    } else if (isSqli) {
         howToSolveUser.push("Step 1: Do NOT submit real personal passwords, emails, credit cards, or sensitive data on this page (this is a security testing laboratory).");
         howToSolveUser.push("Step 2: If you are practicing ethical security testing, you can safely test demo inputs such as 1' OR '1'='1 to observe the behavior.");
         howToSolveUser.push("Step 3: On real production websites, immediately avoid submitting sensitive data if you encounter unusual ports (like 4280) or unverified forms.");
+    } else if (isPathTraversal || isSsrf) {
+        howToSolveUser.push("Step 1: Avoid navigating to links containing encoded traversal sequences (../, %2e%2e/) or internal loopback IPs.");
+        howToSolveUser.push("Step 2: Verify that destination URLs match legitimate production domains before proceeding.");
     } else {
         howToSolveUser.push("Step 1: Always verify that the address bar displays a valid secure HTTPS lock icon before submitting credentials.");
         howToSolveUser.push("Step 2: Check the exact domain name to prevent credential harvesting on lookalike phishing sites.");
@@ -1293,7 +1354,47 @@ function synthesizeLocalDeepExplanation(aiPayload) {
 
     // 6. How to secure (For Developers - Code Snippet in Pure English)
     let howToSecureDev = {};
-    if (isSqli) {
+    if (isPhpCve) {
+        howToSecureDev = {
+            title: "Developer Fix: PHP Security Upgrade & Apache FastCGI Migration (CVE-2024-4577)",
+            steps: [
+                "1. Upgrade PHP immediately to patched versions (PHP 8.3.8+, 8.2.20+, or 8.1.29+).",
+                "2. Migrate from Action php-cgi directives to FastCGI (php-fpm).",
+                "3. Deploy Apache mod_rewrite rules to reject query strings with %ad or starting with hyphen (-)."
+            ],
+            code_snippet: "# Apache mod_rewrite mitigation against CVE-2024-4577\nRewriteEngine On\nRewriteCond %{QUERY_STRING} ^(%ad|-d) [NC,OR]\nRewriteCond %{QUERY_STRING} (allow_url_include|auto_prepend_file) [NC]\nRewriteRule .* - [F,L]"
+        };
+    } else if (isSsrf) {
+        howToSecureDev = {
+            title: "Developer Fix: Strict Hostname Whitelist & Private IP Resolution Filter",
+            steps: [
+                "1. Resolve target hostnames to IP addresses before initiating HTTP requests.",
+                "2. Block private/loopback ranges (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.169.254).",
+                "3. Reject non-HTTP protocol schemes such as gopher://, file://, and dict://."
+            ],
+            code_snippet: "// ✅ SECURE SSRF DEFENSE (Validate IP before fetching):\nconst ip = await dns.resolve4(targetHostname);\nif (isPrivateOrLoopbackIP(ip)) {\n    throw new Error('Access to internal network addresses is forbidden.');\n}\nconst res = await fetch('https://' + targetHostname + '/data');"
+        };
+    } else if (isPathTraversal) {
+        howToSecureDev = {
+            title: "Developer Fix: basename() Sanitization & Template Whitelisting",
+            steps: [
+                "1. Pass user file parameters through basename() to strip directory traversal sequences.",
+                "2. Validate requested templates against a strict allowlist array.",
+                "3. Turn off allow_url_include in php.ini."
+            ],
+            code_snippet: "// ✅ SECURE PATH TRAVERSAL DEFENSE (PHP Whitelist):\n$allowed = ['home.php', 'about.php', 'contact.php'];\n$page = basename($_GET['page']);\nif (!in_array($page, $allowed, true)) {\n    die('Forbidden page request');\n}\ninclude(__DIR__ . '/templates/' . $page);"
+        };
+    } else if (isCmdInjection) {
+        howToSecureDev = {
+            title: "Developer Fix: Avoid Shell Spawning & Use Parameterized Process APIs",
+            steps: [
+                "1. Never pass concatenated strings to system(), exec(), or shell_exec().",
+                "2. Use language-specific process APIs that take arguments as an array without invoking a shell.",
+                "3. Strictly validate inputs using rigid regular expressions (e.g. valid IP addresses only)."
+            ],
+            code_snippet: "// ✅ SECURE IMPLEMENTATION (Strict IP Validation & No Shell):\n$ip = $_POST['ip'];\nif (!filter_var($ip, FILTER_VALIDATE_IP)) {\n    die('Invalid IP address');\n}\n$process = new Process(['ping', '-c', '3', $ip]);\n$process->run();"
+        };
+    } else if (isSqli) {
         howToSecureDev = {
             title: "Developer Fix: Prepared Statements (PDO Parameterized Queries)",
             steps: [
@@ -1301,14 +1402,7 @@ function synthesizeLocalDeepExplanation(aiPayload) {
                 "2. Always utilize database engine Prepared Statements with parameterized queries.",
                 "3. Enforce strict input type-casting for numeric parameters: (int)$_GET['id']."
             ],
-            code_snippet: 
-`// ❌ INSECURE (Vulnerable String Concatenation):
-// $sql = "SELECT first_name, last_name FROM users WHERE user_id = '" . $_GET['id'] . "';";
-
-// ✅ SECURE IMPLEMENTATION (PHP PDO Prepared Statements):
-$stmt = $pdo->prepare('SELECT first_name, last_name FROM users WHERE user_id = :id');
-$stmt->execute(['id' => (int)$_GET['id']]);
-$user = $stmt->fetch();`
+            code_snippet: "// ❌ INSECURE: $sql = \"SELECT * FROM users WHERE user_id = '\" . $_GET['id'] . \"'\";\n// ✅ SECURE PDO PREPARED STATEMENTS:\n$stmt = $pdo->prepare('SELECT first_name, last_name FROM users WHERE user_id = :id');\n$stmt->execute(['id' => (int)$_GET['id']]);\n$user = $stmt->fetch();"
         };
     } else if (isXss) {
         howToSecureDev = {
@@ -1318,13 +1412,7 @@ $user = $stmt->fetch();`
                 "2. Apply robust HTML entity encoding (htmlspecialchars) before echoing user input onto pages.",
                 "3. Enforce a strict Content Security Policy (CSP) header without 'unsafe-inline'."
             ],
-            code_snippet: 
-`// ❌ INSECURE (Dangerous DOM Sink):
-// document.getElementById('output').innerHTML = location.hash;
-
-// ✅ SECURE IMPLEMENTATION (Safe DOM Text Assignment):
-document.getElementById('output').textContent = location.hash;
-// Or sanitize when rendering HTML: DOMPurify.sanitize(userInput);`
+            code_snippet: "// ❌ INSECURE: document.getElementById('output').innerHTML = location.hash;\n// ✅ SECURE: document.getElementById('output').textContent = location.hash;\n// Or sanitize: DOMPurify.sanitize(userInput);"
         };
     } else {
         howToSecureDev = {
@@ -1334,21 +1422,14 @@ document.getElementById('output').textContent = location.hash;
                 "2. Configure HTTP Strict Transport Security (HSTS) with includeSubDomains.",
                 "3. Add CSRF protection tokens and enforce POST methods on all data-submitting forms."
             ],
-            code_snippet: 
-`# Nginx SSL Production Configuration
-server {
-    listen 443 ssl http2;
-    server_name ${hostname || "yourdomain.com"};
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self';" always;
-}`
+            code_snippet: "# Nginx SSL Production Configuration\nserver {\n    listen 443 ssl http2;\n    server_name " + (hostname || "yourdomain.com") + ";\n    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n    add_header Content-Security-Policy \"default-src 'self'; script-src 'self';\" always;\n}"
         };
     }
 
-    const why = vulnerabilityLocations.map(loc => `${loc.title}: ${loc.detail}`);
+    const why = vulnerabilityLocations.map(loc => loc.title + ": " + loc.detail);
 
-    const userMessage = isSqli
-        ? "⚠️ Deliberately vulnerable security lab page detected — safe for controlled testing, but never enter personal data here."
+    const userMessage = (isPhpCve || isCmdInjection || isSqli)
+        ? "⚠️ Critical security vulnerability detected on this page — safe for authorized lab testing, but never enter personal data here."
         : "Protected by ThreatLens ocular engine. Zero cloud exposure.";
 
     return {

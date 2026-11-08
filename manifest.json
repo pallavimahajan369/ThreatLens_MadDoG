@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ThreatLens",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "ThreatLens - Ocular Web Security browser extension that detects suspicious websites, phishing, risky extensions, sensitive data exposure, and prompt injection threats.",
   "icons": {
     "16": "icons/icon16.png",

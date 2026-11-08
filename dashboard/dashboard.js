@@ -68,6 +68,81 @@ function escapeHtml(text) {
 // COMPREHENSIVE FINDINGS KNOWLEDGE BASE
 // ==================================
 const findingKnowledgeBase = {
+    PHP_CGI_ARGUMENT_INJECTION: {
+        title: "PHP CGI Argument Injection (CVE-2024-4577 / CVE-2012-1823)",
+        riskExplanation: "The request or URL parameters match PHP CGI argument injection patterns (e.g. %ad soft hyphen or -d flags). On Windows Apache setups running PHP in CGI mode, Best-Fit character encoding allows attackers to bypass security checks and execute arbitrary operating system commands (Remote Code Execution).",
+        solution: "1. Upgrade PHP immediately to patched versions (PHP 8.3.8+, 8.2.20+, or 8.1.29+).\n2. Migrate from Action php-cgi directives to FastCGI (php-fpm).\n3. Deploy Web Application Firewall (WAF) or rewrite rules to reject query strings with %ad or starting with a hyphen (-)."
+    },
+    PHP_CONFIG_OR_VERSION_DISCLOSURE: {
+        title: "Exposed PHP Configuration / Version Disclosure",
+        riskExplanation: "The webpage exposes detailed PHP runtime internals (such as a public phpinfo() diagnostic page or outdated PHP runtime banner). Attackers leverage these disclosures to identify vulnerable extensions, internal filesystem paths, and unpatched CVE targets.",
+        solution: "1. Immediately delete or password-protect all phpinfo() diagnostic files.\n2. Turn off server signature headers by setting 'expose_php = Off' in php.ini.\n3. Keep the PHP environment updated with current security patches."
+    },
+    INSECURE_PASSWORD_TRANSMISSION: {
+        title: "Insecure Password Transmission (Plaintext / GET Method)",
+        riskExplanation: "User credentials or passwords are submitted over unencrypted HTTP or via the HTTP GET method. This causes passwords to be exposed in cleartext across the network, recorded in browser history, and stored in plain text inside server access logs and proxy logs.",
+        solution: "1. Enforce HTTPS across all pages with HTTP Strict Transport Security (HSTS).\n2. Form submissions containing passwords MUST use the POST method with encrypted transport.\n3. Set autocomplete='current-password' or 'new-password' on password inputs."
+    },
+    MISSING_CSRF_PROTECTION: {
+        title: "Missing Anti-CSRF Token on State-Changing Form",
+        riskExplanation: "This form carries out sensitive state-changing operations (such as password changes, email updates, or financial transactions) via POST without an unpredictable anti-CSRF token. An attacker can trick authenticated users into executing unwanted actions through malicious third-party links or embedded images.",
+        solution: "1. Implement cryptographically secure anti-CSRF tokens for all state-changing forms.\n2. Enforce SameSite=Lax or SameSite=Strict attributes on session cookies.\n3. Check Origin and Referer headers on incoming state-changing requests."
+    },
+    XSS_PAYLOAD_URL: {
+        title: "Cross-Site Scripting (XSS) Payload in URL",
+        riskExplanation: "The URL query parameters contain active HTML/JavaScript injection payloads (e.g. <script>, javascript:, or event handlers). If reflected into the webpage without context-aware sanitization, attacker code executes within the victim's session.",
+        solution: "1. Sanitize and HTML-entity encode all URL parameters before rendering in the DOM.\n2. Enforce a robust Content Security Policy (CSP): script-src 'self'.\n3. Use textContent or DOMPurify rather than innerHTML."
+    },
+    DOM_XSS_SOURCE_SINK: {
+        title: "DOM-Based Cross-Site Scripting Flow Detected",
+        riskExplanation: "An inline script reads client-controlled input from the URL (location.search / hash) and directly injects it into an unescaped execution sink (document.write, innerHTML, or eval), executing arbitrary script code entirely within the browser without server round-trips.",
+        solution: "1. Replace dangerous sinks (document.write, innerHTML) with safe alternatives (textContent, setAttribute).\n2. Sanitize dynamic HTML using DOMPurify before DOM insertion.\n3. Implement Trusted Types API in supporting browsers."
+    },
+    COMMAND_INJECTION_PAYLOAD: {
+        title: "OS Command Injection Payload in URL",
+        riskExplanation: "The URL parameters contain shell metacharacters (;, |, &&, backticks) chained with operating system commands. If concatenated into backend shell execution functions, attackers gain full interactive command shell access to the host.",
+        solution: "1. Never execute system commands with user-supplied input.\n2. Use language-specific safe APIs (e.g. child_process.execFile without shell).\n3. Strictly validate inputs against rigid alphanumeric or IP address regular expressions."
+    },
+    PATH_TRAVERSAL_PAYLOAD: {
+        title: "Path Traversal / Local File Inclusion Payload",
+        riskExplanation: "The URL or request parameters contain directory traversal sequences (../, %2e%2e/) aimed at breaking out of the web document root to read system configuration files (/etc/passwd, win.ini) or source code.",
+        solution: "1. Use basename() to strip directory traversal sequences.\n2. Validate requested files against a strict whitelist of permissible resources.\n3. Ensure the web application user has minimum filesystem read privileges."
+    },
+    EXPOSED_ADMIN_INTERFACE: {
+        title: "Exposed Sensitive Administrative Portal",
+        riskExplanation: "An administrative management interface (such as phpMyAdmin, .git repository, .env file, or actuator endpoints) is publicly exposed without IP restriction or multi-factor authentication, inviting brute force attacks and configuration leaks.",
+        solution: "1. Restrict administrative portals behind corporate VPN or IP allowlists.\n2. Configure web servers (Nginx/Apache) to deny access to dotfiles (e.g. location ~ /\. { deny all; }).\n3. Disable development and actuator endpoints in production environments."
+    },
+    POTENTIAL_SSRF_PARAMETER: {
+        title: "Potential Server-Side Request Forgery (SSRF) Target",
+        riskExplanation: "A URL parameter instructs the server to retrieve remote data from internal loopback addresses (127.0.0.1, localhost), private corporate subnets (10.x, 192.168.x), or cloud metadata services (169.254.169.254), risking internal infrastructure compromise.",
+        solution: "1. Enforce a strict domain allowlist for server-side HTTP fetch operations.\n2. Resolve hostnames and block all private, loopback, and link-local IP ranges before connecting.\n3. Disable dangerous protocols (file://, gopher://, dict://)."
+    },
+    OPEN_REDIRECT_PARAMETER: {
+        title: "Potential Open Redirection Parameter",
+        riskExplanation: "The application accepts untrusted URL parameters that dictate redirection destinations. Attackers exploit this behavior to construct convincing phishing links that bounce victims through a trusted domain onto fraudulent credential-harvesting pages.",
+        solution: "1. Avoid accepting absolute external URLs in redirection parameters; restrict redirects to relative paths.\n2. Validate external destinations against a strict allowlist of trusted domains."
+    },
+    DIRECTORY_LISTING_ENABLED: {
+        title: "Web Server Directory Indexing Enabled",
+        riskExplanation: "The web server automatically generates directory listings when index files are missing, exposing the entire folder hierarchy and allowing unauthorized visitors to download backup archives, scripts, and internal documents.",
+        solution: "1. Disable directory indexing in Apache ('Options -Indexes') or Nginx ('autoindex off;').\n2. Place empty index.html files in public folders to suppress automated directory indexes."
+    },
+    VERBOSE_ERROR_DISCLOSURE: {
+        title: "Verbose Stack Trace / Error Disclosure",
+        riskExplanation: "The application outputs detailed programming call stacks, unhandled exceptions, and database connection strings directly in the HTML response, providing attackers with detailed implementation details and attack vectors.",
+        solution: "1. Configure custom generic error pages for HTTP 404, 500, and 502 status codes.\n2. Set display_errors = Off in PHP and debug = False in Django/Flask/Express.\n3. Record detailed exception traces in centralized, access-controlled log stores."
+    },
+    SESSION_TOKEN_IN_URL: {
+        title: "Session Identifier / Secret Token Leaked in URL",
+        riskExplanation: "Session identifiers (such as PHPSESSID, JSESSIONID) or bearer tokens are passed in URL query strings. These tokens are leaked into proxy caches, browser history logs, and transmitted in Referer headers when clicking external hyperlinks.",
+        solution: "1. Transmit session identifiers exclusively through HTTP-only, Secure, SameSite cookies.\n2. Pass API tokens in HTTP request headers ('Authorization: Bearer <token>') rather than query parameters."
+    },
+    OUTDATED_VULNERABLE_LIBRARY: {
+        title: "Outdated Vulnerable JavaScript Library",
+        riskExplanation: "The application includes an outdated client-side JavaScript library (e.g. legacy jQuery < 3.5.0) that has published Common Vulnerabilities and Exposures (CVEs) such as Cross-Site Scripting in htmlPrefilter.",
+        solution: "1. Upgrade frontend dependencies to the latest stable release (e.g. jQuery 3.7.1+).\n2. Integrate automated Software Composition Analysis (SCA) into the CI/CD pipeline."
+    },
     SQL_INJECTION_ENDPOINT: {
         title: "SQL Injection Target Endpoint Detected",
         riskExplanation: "The current URL matches a known SQL Injection target endpoint (/vulnerabilities/sqli/ or similar). These endpoints typically execute backend SQL queries with parameters from input forms without sanitization, allowing attackers to access unauthorized database records, bypass authentication, or dump user tables.",

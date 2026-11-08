@@ -260,6 +260,59 @@ function applyCorrelationRules(findings) {
         );
     }
 
+        // =====================================
+    // RULE 7 — Critical PHP CGI Injection (CVE-2024-4577)
+    // =====================================
+    const phpCgi = hasFinding("WEB_VULNERABILITY", "PHP_CGI_ARGUMENT_INJECTION");
+    if (phpCgi) {
+        correlationReasons.push(
+            "Critical PHP CGI argument injection vulnerability (CVE-2024-4577 / Remote Code Execution)"
+        );
+    }
+
+    // =====================================
+    // RULE 8 — Insecure Password Transmission
+    // =====================================
+    const insecurePass = hasFinding("WEB_VULNERABILITY", "INSECURE_PASSWORD_TRANSMISSION");
+    if (insecurePass) {
+        correlationReasons.push(
+            "User credentials or passwords transmitted insecurely over GET method or cleartext HTTP"
+        );
+    }
+
+    // =====================================
+    // RULE 9 — SSRF Internal / Cloud Metadata Target
+    // =====================================
+    const ssrfParam = hasFinding("WEB_VULNERABILITY", "POTENTIAL_SSRF_PARAMETER");
+    if (ssrfParam) {
+        correlationReasons.push(
+            "Potential Server-Side Request Forgery (SSRF) target accessing internal/cloud endpoints"
+        );
+    }
+
+    // =====================================
+    // RULE 10 — Path Traversal / File Inclusion
+    // =====================================
+    const pathTraversal = hasFinding("WEB_VULNERABILITY", "PATH_TRAVERSAL_PAYLOAD") ||
+                          hasFinding("WEB_VULNERABILITY", "FILE_INCLUSION_ENDPOINT");
+    if (pathTraversal) {
+        correlationReasons.push(
+            "Path Traversal or Local File Inclusion vulnerability exposing server filesystem files"
+        );
+    }
+
+    // =====================================
+    // RULE 11 — Exposed Admin & Misconfiguration
+    // =====================================
+    const exposedAdmin = hasFinding("WEB_VULNERABILITY", "EXPOSED_ADMIN_INTERFACE");
+    const misconfig = hasFinding("WEB_VULNERABILITY", "VERBOSE_ERROR_DISCLOSURE") ||
+                      hasFinding("WEB_VULNERABILITY", "DIRECTORY_LISTING_ENABLED");
+    if (exposedAdmin && misconfig) {
+        correlationReasons.push(
+            "Exposed administrative interface combined with active system error or directory disclosures"
+        );
+    }
+
     return correlationReasons;
 
 }
