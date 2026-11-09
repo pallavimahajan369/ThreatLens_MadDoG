@@ -94,7 +94,7 @@ Operating strictly within the browser's sandboxed execution environment, ThreatL
 ## 📁 Repository Structure
 
 ```text
-level-1/
+ThreatLens_MadDoG/
 ├── manifest.json                 # Chrome Manifest V3 configuration
 ├── README.md                     # Comprehensive documentation & user guide
 ├── background/
@@ -134,12 +134,12 @@ level-1/
 
 1. Clone or download this repository to your computer:
    ```bash
-   git clone https://github.com/your-username/level-1.git
+   git clone https://github.com/pallavimahajan369/ThreatLens_MadDoG.git
    ```
 2. Open Google Chrome and enter `chrome://extensions/` in the address bar.
 3. Toggle on **Developer mode** in the upper-right corner.
 4. Click the **Load unpacked** button.
-5. In the file picker, select the project directory (`level-1`, the folder containing `manifest.json`).
+5. In the file picker, select the project directory (`ThreatLens_MadDoG`, the folder containing `manifest.json`).
 6. ThreatLens is now installed and immediately active!
 
 ---
@@ -241,52 +241,6 @@ ThreatLens provides **100% deterministic local scanning out of the box** without
 3. Paste the key into the **Personal Google Gemini API Key** field and click **Save Key**.
 4. Your key is stored **100% locally** in your encrypted browser storage—never transmitted to any third-party server.
 5. Click **✦ Analyze with AI** at any time to generate interactive threat analogies, plain-language impacts, and conversational fixes.
-
----
-
-## 🧪 Validating on Vulnerable Testing Targets
-
-You can test ThreatLens safely against standard vulnerable web applications such as **DVWA** (Damn Vulnerable Web Application), **bWAPP**, or **Pentest-Ground**:
-
-| Target Path | Expected Detection | Standard CVSS v3.1 Score |
-|---|---|---|
-| `/vulnerabilities/sqli/` | **SQL Injection Target Endpoint Detected** (`CWE-89`) | **8.6 HIGH** |
-| `/vulnerabilities/sqli_blind/` | **Blind SQL Injection Target Endpoint** (`CWE-89`) | **7.5 HIGH** |
-| `/vulnerabilities/exec/` | **Command Injection Target Endpoint Detected** (`CWE-78`) | **9.8 CRITICAL** |
-| `/vulnerabilities/fi/?page=...` | **Local / Remote File Inclusion (LFI/RFI)** (`CWE-22`) | **8.6 HIGH** |
-| `/vulnerabilities/upload/` | **Unrestricted File Upload Endpoint** (`CWE-434`) | **9.8 CRITICAL** |
-| `/vulnerabilities/csrf/` | **CSRF Susceptible Form & Endpoint** (`CWE-352`) | **7.5 HIGH** |
-| `/vulnerabilities/xss_r/` | **Reflected Cross-Site Scripting (XSS)** (`CWE-79`) | **6.1 MEDIUM** |
-| `/vulnerabilities/xss_s/` | **Stored Cross-Site Scripting (XSS)** (`CWE-79`) | **7.2 HIGH** |
-| `/vulnerabilities/xss_d/` | **DOM-Based Cross-Site Scripting (DOM XSS)** (`CWE-79`) | **6.1 MEDIUM** |
-| `/vulnerabilities/brute/` | **Insecure Authentication / Brute Force Target** (`CWE-307`) | **7.5 HIGH** |
-| `/vulnerabilities/open_redirect/` | **Open HTTP Redirect Vulnerability** (`CWE-601`) | **6.1 MEDIUM** |
-| Any page with `PHPSESSID` | **Accessible Session Token Missing HttpOnly** (`CWE-1004`) | **5.3 MEDIUM** |
-
----
-
-## 🛠️ Automated Verification Suite
-
-ThreatLens includes an automated test suite verifying all 54 core validation checkpoints across all detection engines:
-
-```bash
-# Run the complete test suite
-node scratch/test_full_suite.js
-```
-
-```text
-================================================================================
-🛡️  THREATLENS OCULAR WEB SECURITY - COMPREHENSIVE AUTOMATED TEST SUITE
-================================================================================
-  ✅ [PASS] Module 1: CVE & OWASP Registry (22/22 Rules)
-  ✅ [PASS] Module 2: Security Auditor & Recon Suite (6/6 Tests)
-  ✅ [PASS] Module 3: SOC & SIEM Intelligence Engine (8/8 Tests)
-  ✅ [PASS] Module 4: Local AI Shield & Sanitizer (11/11 Tests)
-  ✅ [PASS] Module 5: Dashboard Resilience & Integrity (7/7 Tests)
-================================================================================
-📊 FINAL TEST REPORT: 54/54 TESTS PASSED (100% HEALTHY)
-================================================================================
-```
 
 ---
 
