@@ -67,7 +67,92 @@ function escapeHtml(text) {
 // ==================================
 // COMPREHENSIVE FINDINGS KNOWLEDGE BASE
 // ==================================
+
+function getKnowledgeBaseEntry(type) {
+    if (typeof getRegisteredVulnerability === "function") {
+        const reg = getRegisteredVulnerability(type);
+        if (reg) {
+            return {
+                title: reg.title,
+                riskExplanation: reg.riskExplanation,
+                solution: reg.solution
+            };
+        }
+    }
+    return findingKnowledgeBase[type] || {};
+}
+
 const findingKnowledgeBase = {
+    BRUTE_FORCE_SUSCEPTIBLE_LOGIN: {
+        title: "Brute Force Susceptible Authentication",
+        riskExplanation: "The authentication mechanism does not enforce rate limiting, account lockout thresholds, or CAPTCHA validation. Attackers can execute automated dictionary or credential-stuffing attacks to compromise user and administrator accounts.",
+        solution: "1. Implement progressive account lockouts after consecutive failed login attempts.\n2. Enforce IP-based rate limiting (e.g. max 5 attempts per minute).\n3. Deploy Multi-Factor Authentication (MFA) and CAPTCHA."
+    },
+    CROSS_SITE_REQUEST_FORGERY: {
+        title: "Cross-Site Request Forgery (CSRF) Endpoint",
+        riskExplanation: "Sensitive operations (such as password modification or account updates) can be triggered without anti-CSRF tokens. An attacker can craft a malicious external page that submits unauthorized requests using the victim's active session.",
+        solution: "1. Include cryptographically unpredictable anti-CSRF tokens in all state-changing forms.\n2. Set SameSite=Lax or SameSite=Strict attributes on session cookies.\n3. Require verification of current credentials before applying critical updates."
+    },
+    UNRESTRICTED_FILE_UPLOAD: {
+        title: "Unrestricted File Upload Endpoint",
+        riskExplanation: "The file upload handler accepts arbitrary files without validating file extensions or MIME types server-side. Attackers can upload executable web shells (.php, .jsp, .phtml) to obtain interactive Remote Code Execution (RCE) on the host.",
+        solution: "1. Validate file extensions strictly against an allowlist of image extensions (jpg, png, gif).\n2. Store uploaded files in an isolated directory outside the web root with script execution disabled.\n3. Generate randomized filenames and re-encode images."
+    },
+    INSECURE_CAPTCHA_BYPASS: {
+        title: "Insecure CAPTCHA / Multi-Step Logic Bypass",
+        riskExplanation: "The application relies on client-side state flags (such as 'step=2' or 'passed_captcha=true') to verify CAPTCHA completion. Attackers can manipulate request parameters to bypass verification entirely.",
+        solution: "1. Verify CAPTCHA responses strictly server-side before executing privileged operations.\n2. Never trust client-supplied status flags.\n3. Invalidate CAPTCHA tokens immediately after first use."
+    },
+    BLIND_SQL_INJECTION_ENDPOINT: {
+        title: "Blind / Time-Based SQL Injection Target Endpoint",
+        riskExplanation: "The application passes user input into backend SQL queries without displaying database errors or records directly. Attackers can extract the entire database character-by-character using boolean condition testing or SLEEP() time delays.",
+        solution: "1. Use Parameterized Prepared Statements (PDO in PHP, PreparedStatement in Java/Node).\n2. Enforce strict numerical type casting on input parameters: (int)$_GET['id'].\n3. Deploy Web Application Firewall (WAF) inspection."
+    },
+    WEAK_SESSION_ID_GENERATION: {
+        title: "Predictable / Weak Session ID Generation",
+        riskExplanation: "The application generates sequential, predictable, or timestamp-based session cookies (such as integer counters). Attackers can predict future or concurrent session IDs to hijack authenticated sessions without entering credentials.",
+        solution: "1. Use Cryptographically Secure Pseudo-Random Number Generators (CSPRNG) with at least 128 bits of entropy (e.g. random_bytes(32)).\n2. Rely on proven web framework session handlers.\n3. Mark session cookies with HttpOnly, Secure, and SameSite attributes."
+    },
+    DOM_XSS_ENDPOINT: {
+        title: "DOM-Based Cross-Site Scripting (DOM XSS) Endpoint",
+        riskExplanation: "Client-side JavaScript reads input directly from the document location (such as default=English) and executes it into unescaped DOM sinks (document.write or innerHTML), allowing attackers to execute arbitrary JavaScript in the victim's session.",
+        solution: "1. Avoid dangerous sinks such as document.write() and innerHTML.\n2. Use safe text assignment APIs like textContent or innerText.\n3. Sanitize untrusted input with DOMPurify."
+    },
+    REFLECTED_XSS_ENDPOINT: {
+        title: "Reflected Cross-Site Scripting (Reflected XSS) Endpoint",
+        riskExplanation: "The web application reflects user query parameters directly into the HTML response without context-aware HTML entity encoding. Attackers can craft deceptive links that execute malicious JavaScript when opened by victims.",
+        solution: "1. Apply context-aware HTML entity encoding: htmlspecialchars(string, ENT_QUOTES, 'UTF-8').\n2. Implement a Content Security Policy (CSP) header: script-src 'self'.\n3. Set HttpOnly flags on session cookies."
+    },
+    STORED_XSS_ENDPOINT: {
+        title: "Stored / Persistent Cross-Site Scripting Endpoint",
+        riskExplanation: "The application stores user input (such as comments or guestbook messages) in backend databases and displays it to subsequent visitors without sanitization. The malicious script executes automatically in the browser of every visitor.",
+        solution: "1. Context-encode all dynamic values before rendering them in the DOM.\n2. Validate and sanitize input strings server-side using HTML sanitization libraries.\n3. Enforce a strict Content Security Policy (CSP) that disables inline script execution."
+    },
+    CSP_BYPASS_VULNERABILITY: {
+        title: "Content Security Policy (CSP) Bypass Endpoint",
+        riskExplanation: "The page configures a Content Security Policy with weaknesses (such as allowing 'unsafe-inline', wildcards '*', or hosting JSONP endpoints) that permit attackers to bypass script restrictions.",
+        solution: "1. Eliminate 'unsafe-inline' and 'unsafe-eval' from the CSP header.\n2. Implement cryptographic script nonces: script-src 'nonce-RANDOM'.\n3. Restrict object-src to 'none' and base-uri to 'self'."
+    },
+    CLIENT_SIDE_SECURITY_BYPASS: {
+        title: "Client-Side Security Control Bypass",
+        riskExplanation: "The application attempts to enforce access control or token validation entirely inside client-side JavaScript. Because client-side code is fully controllable by users, attackers can manipulate JavaScript variables and bypass the control.",
+        solution: "1. Never rely on client-side JavaScript for access control, authorization, or business logic.\n2. Enforce all validation and permission checks on the server.\n3. Treat all client submissions as untrusted."
+    },
+    DATABASE_SETUP_EXPOSURE: {
+        title: "Exposed Database Setup & Reset Interface",
+        riskExplanation: "The setup script allows unauthenticated visitors to initialize, reset, or drop database tables and revert credentials to factory defaults. Attackers can wipe application data or reset administrative access.",
+        solution: "1. Delete setup.php immediately after installation.\n2. Restrict access to administrative scripts using web server authorization and IP allowlists."
+    },
+    LAB_SECURITY_CONFIGURATION: {
+        title: "DVWA Lab Security Level Configuration",
+        riskExplanation: "This page configures the security difficulty level (Low, Medium, High, Impossible) for the DVWA testing environment.",
+        solution: "1. In production applications, never expose security configuration switches to public users.\n2. Restrict administrative configurations to authorized administrators."
+    },
+    LAB_INSTRUCTIONS_PAGE: {
+        title: "Penetration Testing Lab Instructions",
+        riskExplanation: "Educational instructions for practicing ethical security testing techniques on this lab instance.",
+        solution: "1. Lab documentation should remain isolated from production environments."
+    },
     PHP_CGI_ARGUMENT_INJECTION: {
         title: "PHP CGI Argument Injection (CVE-2024-4577 / CVE-2012-1823)",
         riskExplanation: "The request or URL parameters match PHP CGI argument injection patterns (e.g. %ad soft hyphen or -d flags). On Windows Apache setups running PHP in CGI mode, Best-Fit character encoding allows attackers to bypass security checks and execute arbitrary operating system commands (Remote Code Execution).",
@@ -1067,6 +1152,31 @@ function openFindingModal(finding, pageUrl) {
         modalSolutionText.textContent =
             finding.details?.solution || kb.solution;
     }
+    // CVSS & Ethical Verification Guide Section
+    const modalAuditorGuideSection = document.getElementById("modalAuditorGuideSection");
+    const modalCvssScore = document.getElementById("modalCvssScore");
+    const modalCvssVector = document.getElementById("modalCvssVector");
+    const modalAuditorGuideText = document.getElementById("modalAuditorGuideText");
+
+    const cvssData = typeof getVulnerabilityCvssAndGuide === "function"
+        ? getVulnerabilityCvssAndGuide(type)
+        : null;
+
+    if (cvssData && modalAuditorGuideSection) {
+        modalAuditorGuideSection.classList.remove("hidden");
+        if (modalCvssScore) {
+            modalCvssScore.textContent = `${cvssData.cvssScore} ${cvssData.cvssSeverity}`;
+            modalCvssScore.className = `cvss-score-pill cvss-${cvssData.cvssSeverity.toLowerCase()}`;
+        }
+        if (modalCvssVector) {
+            modalCvssVector.textContent = cvssData.cvssVector;
+        }
+        if (modalAuditorGuideText) {
+            modalAuditorGuideText.textContent = `${cvssData.guide.title}\n\n` + cvssData.guide.steps.join("\n");
+        }
+    } else if (modalAuditorGuideSection) {
+        modalAuditorGuideSection.classList.add("hidden");
+    }
 
     // Open Modal
     modalOverlay.classList.remove("hidden");
@@ -1077,10 +1187,300 @@ function openFindingModal(finding, pageUrl) {
 // MAIN DASHBOARD DATA RENDERER
 // ==================================
 
+
+// ==================================
+// ETHICAL AUDITOR & PENTEST SUITE LOGIC
+// ==================================
+
+let lastRenderedScan = null;
+let lastRenderedExtensionScan = [];
+let lastRenderedAiAnalysis = null;
+let lastRenderedPageUrl = "";
+
+function renderAuditorSuite(safeScan) {
+    const audit = safeScan?.securityAudit || {};
+    const technologies = audit.technologies || [];
+    const attackSurface = audit.attackSurface || {};
+    const headerCookie = audit.headerCookieAudit || {};
+
+    // 1. Technology Profile
+    const techStackContainer = document.getElementById("techStackContainer");
+    if (techStackContainer) {
+        techStackContainer.replaceChildren();
+
+        if (technologies.length === 0) {
+            const fallbackP = document.createElement("p");
+            fallbackP.className = "empty-hint";
+            fallbackP.textContent = "No specific CMS or framework signatures detected in DOM.";
+            techStackContainer.appendChild(fallbackP);
+        } else {
+            const tagList = document.createElement("div");
+            tagList.className = "tech-tag-list";
+
+            technologies.forEach(tech => {
+                const tag = document.createElement("span");
+                const catClass = tech.category ? `category-${tech.category.toLowerCase().replace(/[^a-z]/g, "")}` : "";
+                tag.className = `tech-tag ${catClass}`;
+                tag.innerHTML = `<strong>${escapeHtml(tech.name)}</strong> <em>(${escapeHtml(tech.category)})</em>`;
+                tagList.appendChild(tag);
+            });
+            techStackContainer.appendChild(tagList);
+        }
+    }
+
+    // 2. Attack Surface (Hidden Inputs & Routes)
+    const attackSurfaceContainer = document.getElementById("attackSurfaceContainer");
+    if (attackSurfaceContainer) {
+        attackSurfaceContainer.replaceChildren();
+
+        const group = document.createElement("div");
+        group.className = "surface-list-group";
+
+        // Discovered API Routes
+        const routes = attackSurface.discoveredEndpoints || [];
+        const routeHeader = document.createElement("span");
+        routeHeader.className = "surface-subheading";
+        routeHeader.textContent = `Discovered API Routes (${routes.length})`;
+        group.appendChild(routeHeader);
+
+        if (routes.length === 0) {
+            const emptyP = document.createElement("span");
+            emptyP.className = "empty-hint";
+            emptyP.textContent = "No internal API routes found in page scripts.";
+            group.appendChild(emptyP);
+        } else {
+            routes.slice(0, 5).forEach(r => {
+                const pill = document.createElement("div");
+                pill.className = "route-pill";
+                pill.textContent = r;
+                group.appendChild(pill);
+            });
+            if (routes.length > 5) {
+                const more = document.createElement("span");
+                more.className = "empty-hint";
+                more.textContent = `+ ${routes.length - 5} additional routes discovered`;
+                group.appendChild(more);
+            }
+        }
+
+        // Hidden Inputs
+        const hiddenInps = attackSurface.hiddenInputs || [];
+        const inputHeader = document.createElement("span");
+        inputHeader.className = "surface-subheading";
+        inputHeader.textContent = `Hidden Form Parameters (${hiddenInps.length})`;
+        group.appendChild(inputHeader);
+
+        if (hiddenInps.length === 0) {
+            const emptyP = document.createElement("span");
+            emptyP.className = "empty-hint";
+            emptyP.textContent = "No hidden form fields detected.";
+            group.appendChild(emptyP);
+        } else {
+            hiddenInps.slice(0, 4).forEach(inp => {
+                const pill = document.createElement("div");
+                pill.className = "hidden-input-pill";
+                pill.innerHTML = `<span>${escapeHtml(inp.name)}</span><em>${escapeHtml(inp.formAction || "form")}</em>`;
+                group.appendChild(pill);
+            });
+        }
+
+        // Sensitive Comments
+        const comments = attackSurface.sensitiveComments || [];
+        if (comments.length > 0) {
+            const commHeader = document.createElement("span");
+            commHeader.className = "surface-subheading";
+            commHeader.textContent = `Suspicious HTML Comments (${comments.length})`;
+            group.appendChild(commHeader);
+
+            comments.slice(0, 2).forEach(c => {
+                const box = document.createElement("div");
+                box.className = "comment-leak-box";
+                box.textContent = `<!-- ${c} -->`;
+                group.appendChild(box);
+            });
+        }
+
+        attackSurfaceContainer.appendChild(group);
+    }
+
+    // 3. Header & Cookie Hygiene
+    const headerCookieContainer = document.getElementById("headerCookieContainer");
+    if (headerCookieContainer) {
+        headerCookieContainer.replaceChildren();
+
+        // Protocol
+        const isHttps = headerCookie.isHttps !== false;
+        const protoRow = document.createElement("div");
+        protoRow.className = "hygiene-item";
+        protoRow.innerHTML = `<span>Transport Encryption</span><span class="${isHttps ? 'hygiene-badge-good' : 'hygiene-badge-bad'}">${isHttps ? 'HTTPS SECURE' : 'HTTP PLAINTEXT'}</span>`;
+        headerCookieContainer.appendChild(protoRow);
+
+        // CSP
+        const missingCsp = headerCookie.missingCsp !== false;
+        const cspRow = document.createElement("div");
+        cspRow.className = "hygiene-item";
+        cspRow.innerHTML = `<span>Content Security Policy (Meta)</span><span class="${missingCsp ? 'hygiene-badge-warn' : 'hygiene-badge-good'}">${missingCsp ? 'MISSING CSP META' : 'CSP CONFIGURED'}</span>`;
+        headerCookieContainer.appendChild(cspRow);
+
+        // Cookies
+        const cookieData = headerCookie.cookieHygiene || {};
+        const totalCookies = cookieData.totalAccessible || 0;
+        const insecureCookies = cookieData.insecureCookies || [];
+
+        const cookieRow = document.createElement("div");
+        cookieRow.className = "hygiene-item";
+        if (insecureCookies.length > 0) {
+            cookieRow.innerHTML = `<span>Accessible Session Tokens</span><span class="hygiene-badge-bad">${insecureCookies.length} MISSING HTTPONLY</span>`;
+        } else if (totalCookies > 0) {
+            cookieRow.innerHTML = `<span>Client Accessible Cookies</span><span class="hygiene-badge-good">${totalCookies} Cookie(s)</span>`;
+        } else {
+            cookieRow.innerHTML = `<span>Cookie Surface</span><span class="hygiene-badge-good">0 Client Exposed</span>`;
+        }
+        headerCookieContainer.appendChild(cookieRow);
+    }
+}
+
+function generateAndDownloadAuditReport() {
+    const scan = lastRenderedScan || {};
+    const url = lastRenderedPageUrl || scan.url || window.location.href;
+    let hostname = "target-website";
+    try {
+        hostname = new URL(url).hostname || "target-website";
+    } catch (e) {}
+
+    const audit = scan.securityAudit || {};
+    const technologies = audit.technologies || [];
+    const attackSurface = audit.attackSurface || {};
+    const findings = [
+        ...(scan.webVulnerabilityFindings || []),
+        ...(scan.urlFindings || []),
+        ...(scan.domFindings || []),
+        ...(scan.formFindings || []),
+        ...(scan.scriptIframeFindings || []),
+        ...(scan.sensitiveDataFindings || []),
+        ...(scan.promptInjectionFindings || [])
+    ].filter(f => f && !informationalTypes.includes(f.type));
+
+    const overallRisk = scan.overallRisk || scan.risk?.level || "LOW";
+    const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+
+    let md = `# 🛡️ ThreatLens Penetration Testing & Security Audit Report\n\n`;
+    md += `**Target Host:** ${hostname}  \n`;
+    md += `**Target URL:** ${url}  \n`;
+    md += `**Assessment Date:** ${timestamp}  \n`;
+    md += `**Overall Environment Risk:** ${overallRisk}  \n`;
+    md += `**Auditing Engine:** ThreatLens Ocular Security Assistant v1.0.4  \n\n`;
+    md += `---\n\n`;
+
+    // 1. Executive Summary
+    md += `## 1. Executive Summary\n\n`;
+    md += `During passive client-side security assessment of **${hostname}**, ThreatLens cataloged **${findings.length} security indicator(s)**. `;
+    if (overallRisk === "HIGH" || overallRisk === "CRITICAL") {
+        md += `Critical or high-severity vulnerabilities were identified that may allow unauthorized data extraction, database manipulation, or administrative session hijacking. Immediate remediation is required.\n\n`;
+    } else {
+        md += `The assessed web application exhibits a stable baseline posture with no immediate critical exploitation paths detected.\n\n`;
+    }
+
+    // 2. Attack Surface & Tech Stack
+    md += `## 2. Attack Surface & Technology Fingerprinting\n\n`;
+    if (technologies.length > 0) {
+        md += `### Detected Technologies & Frameworks\n`;
+        md += `| Technology | Category | Confidence |\n| :--- | :--- | :--- |\n`;
+        technologies.forEach(t => {
+            md += `| ${t.name} | ${t.category} | ${t.confidence || "HIGH"} |\n`;
+        });
+        md += `\n`;
+    }
+
+    const endpoints = attackSurface.discoveredEndpoints || [];
+    if (endpoints.length > 0) {
+        md += `### Discovered API Endpoints & Routes\n`;
+        endpoints.forEach(ep => {
+            md += `- \`${ep}\`\n`;
+        });
+        md += `\n`;
+    }
+
+    const hiddenInputs = attackSurface.hiddenInputs || [];
+    if (hiddenInputs.length > 0) {
+        md += `### Hidden Form Parameters\n`;
+        hiddenInputs.forEach(inp => {
+            md += `- **${inp.name}** (Form: \`${inp.formAction}\`)\n`;
+        });
+        md += `\n`;
+    }
+
+    // 3. Technical Findings
+    md += `## 3. Technical Security Findings & CVSS v3.1 Impact\n\n`;
+    if (findings.length === 0) {
+        md += `*No active vulnerabilities or suspicious anomalies detected.*\n\n`;
+    } else {
+        findings.forEach((f, idx) => {
+            const kb = getKnowledgeBaseEntry(f.type);
+            const cvss = typeof getVulnerabilityCvssAndGuide === "function" ? getVulnerabilityCvssAndGuide(f.type) : null;
+            const title = f.details?.title || kb.title || f.reason || f.type;
+            const severity = (f.severity || "LOW").toUpperCase();
+
+            md += `### Finding #${idx + 1}: ${title}\n`;
+            md += `- **Severity:** ${severity} ${cvss ? `(CVSS ${cvss.cvssScore})` : ""}\n`;
+            if (cvss) {
+                md += `- **CVSS v3.1 Vector:** \`${cvss.cvssVector}\`\n`;
+            }
+            md += `- **Category:** ${f.category || "WEB_VULNERABILITY"}\n`;
+            md += `- **Indicator Type:** \`${f.type}\`\n\n`;
+
+            md += `**Threat Analysis:**\n`;
+            md += `${f.details?.riskExplanation || kb.riskExplanation || f.reason || "Security engine flagged this element."}\n\n`;
+
+            if (cvss && cvss.guide && cvss.guide.steps) {
+                md += `**Ethical Verification Methodology (Authorized Testing):**\n`;
+                cvss.guide.steps.forEach(s => {
+                    md += `${s}\n`;
+                });
+                md += `\n`;
+            }
+
+            md += `**Remediation & Defense Plan:**\n`;
+            md += `${f.details?.solution || kb.solution || "Apply strict validation and security controls."}\n\n`;
+            md += `---\n\n`;
+        });
+    }
+
+    // 4. Header & Cookie Hygiene
+    md += `## 4. Header & Cookie Security Hygiene\n\n`;
+    const isHttps = audit.headerCookieAudit?.isHttps !== false;
+    const missingCsp = audit.headerCookieAudit?.missingCsp !== false;
+    md += `- **Transport Encryption:** ${isHttps ? "Secure (HTTPS)" : "Insecure (HTTP / Non-TLS)"}\n`;
+    md += `- **Content Security Policy (CSP Meta):** ${missingCsp ? "Missing CSP directive" : "Active"}\n`;
+    md += `- **Accessible Session Cookies:** ${audit.headerCookieAudit?.cookieHygiene?.insecureCookies?.length || 0} sensitive cookie(s) missing HttpOnly\n\n`;
+
+    md += `---\n*Report generated by ThreatLens Ocular Security Assistant.*\n`;
+
+    // Download trigger
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = `ThreatLens_Audit_Report_${hostname}_${Date.now()}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+}
+
 function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     const isRestricted = isRestrictedUrl(pageUrl);
     const safeScan = scan || {};
     const safeExtensionScan = Array.isArray(extensionScan) ? extensionScan : [];
+    // Store active scan state for report export
+    lastRenderedScan = safeScan;
+    lastRenderedExtensionScan = safeExtensionScan;
+    lastRenderedAiAnalysis = aiAnalysis;
+    lastRenderedPageUrl = pageUrl;
+
+    // Render Auditor Suite
+    renderAuditorSuite(safeScan);
+
 
     // ----------------------------------
     // WEBSITE URL
@@ -1540,5 +1940,13 @@ if (copyAiCodeBtn) {
                 setTimeout(() => copyAiCodeBtn.textContent = orig, 2000);
             });
         }
+    });
+}
+
+// Export Pentest Report Button
+const exportReportBtn = document.getElementById("exportReportBtn");
+if (exportReportBtn) {
+    exportReportBtn.addEventListener("click", () => {
+        generateAndDownloadAuditReport();
     });
 }

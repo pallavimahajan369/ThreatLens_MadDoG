@@ -160,6 +160,57 @@
         </section>
 
 
+        <!-- ========================================= -->
+        <!-- SECURITY AUDITOR & ETHICAL HACKER SUITE   -->
+        <!-- ========================================= -->
+        <section class="auditor-section">
+            <div class="auditor-header">
+                <div class="auditor-title-group">
+                    <h2>Ethical Hacker & Security Auditor Suite</h2>
+                    <span class="auditor-badge">ACTIVE RECON</span>
+                </div>
+                <button id="exportReportBtn" class="export-report-btn" type="button" title="Download Penetration Testing Audit Report">
+                    <span class="btn-icon">📑</span> Export Pentest Report (.md)
+                </button>
+            </div>
+            <p class="auditor-subtitle">Passive attack surface mapping, technology stack fingerprinting, hidden input inspection, and security header auditing for authorized security researchers.</p>
+
+            <div class="auditor-grid">
+                <!-- 1. Technology Profile Card -->
+                <div class="auditor-card">
+                    <div class="auditor-card-header">
+                        <span class="card-icon">🔍</span>
+                        <h3>Technology Profile</h3>
+                    </div>
+                    <div id="techStackContainer" class="auditor-card-body">
+                        <span class="empty-hint">Scanning technology signatures...</span>
+                    </div>
+                </div>
+
+                <!-- 2. Hidden Attack Surface & Endpoints -->
+                <div class="auditor-card">
+                    <div class="auditor-card-header">
+                        <span class="card-icon">🎯</span>
+                        <h3>Attack Surface & Discovered Routes</h3>
+                    </div>
+                    <div id="attackSurfaceContainer" class="auditor-card-body">
+                        <span class="empty-hint">Inspecting hidden parameters and API routes...</span>
+                    </div>
+                </div>
+
+                <!-- 3. Security Headers & Cookie Audit -->
+                <div class="auditor-card">
+                    <div class="auditor-card-header">
+                        <span class="card-icon">🛡️</span>
+                        <h3>Header & Cookie Hygiene</h3>
+                    </div>
+                    <div id="headerCookieContainer" class="auditor-card-body">
+                        <span class="empty-hint">Auditing cookie and transport hygiene...</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- ========================= -->
         <!-- AI NEURAL ANALYSIS        -->
         <!-- ========================= -->
@@ -402,6 +453,27 @@
                     </div>
                 </div>
 
+                <!-- Ethical Hacker / CVSS Verification Section -->
+                <div class="modal-section" id="modalAuditorGuideSection">
+                    <h4 class="section-title">
+                        <span class="section-icon">⚔️</span>
+                        <span>Ethical Verification & CVSS v3.1 Impact</span>
+                    </h4>
+                    <div class="cvss-strip">
+                        <div class="cvss-item">
+                            <span class="cvss-label">CVSS Base Score</span>
+                            <span id="modalCvssScore" class="cvss-score-pill cvss-high">8.6 HIGH</span>
+                        </div>
+                        <div class="cvss-item">
+                            <span class="cvss-label">Vector String</span>
+                            <code id="modalCvssVector" class="cvss-vector-code">CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N</code>
+                        </div>
+                    </div>
+                    <div id="modalAuditorGuideText" class="modal-box auditor-guide-box">
+                        <!-- Populated dynamically with verification steps -->
+                    </div>
+                </div>
+
                 <!-- Solution / Remediation Section -->
                 <div class="modal-section">
                     <h4 class="section-title">
@@ -421,6 +493,8 @@
     </div>
 
 
+    <script src="../content/cve-registry.js"></script>
+    <script src="../content/security-auditor.js"></script>
     <script src="dashboard.js"></script>
 
 </body>

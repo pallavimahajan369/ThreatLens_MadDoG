@@ -46,22 +46,23 @@ function setStorage(data) {
 chrome.storage.local.get(
     ["privacyMode", "aiEnabled", "aiConsent"],
     (settings) => {
-        const defaults = {};
+        const updates = {};
 
-        if (settings.privacyMode === undefined) {
-            defaults.privacyMode = true;
+        if (settings.privacyMode !== true) {
+            updates.privacyMode = true;
         }
 
-        if (settings.aiEnabled === undefined) {
-            defaults.aiEnabled = true;
+        // AI scanning is disabled by default for strict local security and data privacy
+        if (settings.aiEnabled !== false) {
+            updates.aiEnabled = false;
         }
 
-        if (settings.aiConsent === undefined) {
-            defaults.aiConsent = true;
+        if (settings.aiConsent !== false) {
+            updates.aiConsent = false;
         }
 
-        if (Object.keys(defaults).length > 0) {
-            chrome.storage.local.set(defaults);
+        if (Object.keys(updates).length > 0) {
+            chrome.storage.local.set(updates);
         }
     }
 );
@@ -424,13 +425,6 @@ chrome.runtime.onMessage.addListener(
                     }
 
                     if (!geminiApiKey) {
-                        // Check if local dev backend is active
-                        try {
-                            const ping = await fetch("http://localhost:3000/health", { method: "GET", signal: AbortSignal.timeout(1500) });
-                            if (ping.ok) {
-                                return sendResponse({ success: true, mode: "LOCAL_BACKEND", message: "Local Backend running on port 3000." });
-                            }
-                        } catch {}
                         return sendResponse({ success: false, error: "No API key saved. Paste your Gemini API key and click 'Save Key' first." });
                     }
 
@@ -499,21 +493,21 @@ chrome.runtime.onMessage.addListener(
                         await setStorage({ geminiApiKey });
                     }
 
+                    // If no API key is provided, synthesize the full explanation locally
                     if (!geminiApiKey) {
-                        // Check if local dev backend is running
-                        let localBackendAlive = false;
-                        try {
-                            const ping = await fetch("http://localhost:3000/health", { method: "GET", signal: AbortSignal.timeout(1200) });
-                            if (ping.ok) localBackendAlive = true;
-                        } catch {}
-
-                        if (!localBackendAlive) {
-                            return sendResponse({
-                                success: false,
-                                code: "NO_API_KEY",
-                                error: "No Gemini API Key found. Add your free key in Settings below to enable AI analysis."
-                            });
+                        const localSynth = synthesizeLocalDeepExplanation(aiPayload);
+                        const aiResult = {
+                            success: true,
+                            risk: aiPayload.overallRisk,
+                            analysis: localSynth,
+                            isLocal: true
+                        };
+                        const toSave = { latest_ai_analysis: aiResult };
+                        if (targetTabId) {
+                            toSave[`ai_analysis_${targetTabId}`] = aiResult;
                         }
+                        await setStorage(toSave);
+                        return sendResponse({ success: true, tabId: targetTabId, result: aiResult });
                     }
 
                     const storage = await getStorage([`scan_${targetTabId}`, "lastScan", "extensionScan"]);
@@ -896,45 +890,29 @@ chrome.runtime.onMessage.addListener(
 
                                             
                                            
-                                        chrome.storage.local.get(
-                                            ["aiEnabled", "aiConsent", "privacyMode"],
-                                            (settings) => {
-                                                const aiEnabled = settings.aiEnabled === true;
-                                                const aiConsent = settings.aiConsent === true;
-
-                                                // Privacy Mode must remain ON.
-                                                if (settings.privacyMode !== true) {
-                                                    chrome.storage.local.set({ privacyMode: true });
-                                                }
-
-                                                // AI OFF means no cloud request.
-                                                if (!aiEnabled || !aiConsent) {
-                                                    console.log(
-                                                        "ThreatLens: AI disabled or consent missing. Local scan only."
-                                                    );
-                                                    aiRequestsInProgress.delete(tabId);
-                                                    return;
-                                                }
-
-                                                // aiPayload was prepared above by buildAISecurityPayload().
-                                                // Verify that it removes sensitive values before enabling cloud requests.
-                                                requestAIAnalysis(aiPayload, tabId)
-                                                    .then(() => {
-                                                        return chrome.storage.local.set({
-                                                            [`ai_fingerprint_${tabId}`]: currentFingerprint
-                                                        });
-                                                    })
-                                                    .catch((error) => {
-                                                        console.error(
-                                                            "ThreatLens AI analysis failed:",
-                                                            error.message
-                                                        );
-                                                    })
-                                                    .finally(() => {
-                                                        aiRequestsInProgress.delete(tabId);
-                                                    });
-                                            }
-                                        );
+                                        // ==========================================
+                                        // 100% LOCAL DETERMINISTIC SECURITY SCANNING
+                                        // ==========================================
+                                        // AI is strictly excluded from the scanning pipeline.
+                                        // All vulnerability detection, heuristic checks, and threat
+                                        // syntheses execute strictly inside the local client sandbox.
+                                        const localExplanation = synthesizeLocalDeepExplanation(aiPayload);
+                                        chrome.storage.local.set({
+                                            [`ai_analysis_${tabId}`]: {
+                                                success: true,
+                                                risk: aiPayload.overallRisk,
+                                                analysis: localExplanation,
+                                                isLocal: true
+                                            },
+                                            latest_ai_analysis: {
+                                                success: true,
+                                                risk: aiPayload.overallRisk,
+                                                analysis: localExplanation,
+                                                isLocal: true
+                                            },
+                                            [`ai_fingerprint_${tabId}`]: currentFingerprint
+                                        });
+                                        aiRequestsInProgress.delete(tabId);
 
 
 
@@ -1454,8 +1432,6 @@ async function requestAIAnalysis(
         const config = await getStorage(["geminiApiKey"]);
         geminiApiKey = config.geminiApiKey ? config.geminiApiKey.trim() : null;
     }
-    const backendUrl = "http://localhost:3000/api/analyze";
-
     try {
         let result = null;
 
@@ -1570,19 +1546,12 @@ You MUST return ONLY valid JSON matching this exact structure:
                 directSuccess = true;
             }
         } else {
-            console.log("ThreatLens: Sending sanitized payload to local AI backend");
-            const response = await fetch(backendUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(aiPayload),
-                signal: AbortSignal.timeout(15000)
-            });
-
-            if (!response.ok) {
-                throw new Error(`Local backend returned HTTP ${response.status}`);
-            }
-
-            result = await response.json();
+            result = {
+                success: true,
+                risk: aiPayload.overallRisk,
+                analysis: synthesizeLocalDeepExplanation(aiPayload),
+                isLocal: true
+            };
         }
 
         if (!result || typeof result !== "object") {

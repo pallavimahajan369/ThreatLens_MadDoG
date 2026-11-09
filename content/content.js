@@ -111,6 +111,19 @@ function scanPage(reason = "page-load") {
         result.phishingRisk = phishingRisk;
 
         // ===============================
+        // SECURITY AUDITOR & RECON SUITE
+        // ===============================
+        let securityAudit = null;
+        try {
+            if (typeof analyzeSecurityAudit === "function") {
+                securityAudit = analyzeSecurityAudit();
+            }
+        } catch (e) {
+            console.error("ThreatLens: analyzeSecurityAudit error:", e);
+        }
+        result.securityAudit = securityAudit;
+
+        // ===============================
         // RISK ENGINE
         // ===============================
         const allFindings = [

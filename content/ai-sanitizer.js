@@ -14,7 +14,56 @@ function safeEnum(value, allowed, fallback) {
     return allowed.has(normalized) ? normalized : fallback;
 }
 
-// Remove common secrets and unnecessary identifying data.
+/**
+ * Sanitizes URLs to remove sensitive credentials, session IDs, and tokens from query parameters.
+ * E.g., strips PHPSESSID, JSESSIONID, auth tokens, passwords, and userinfo.
+ * @param {string} rawUrl 
+ * @returns {string} Sanitized URL safe for AI analysis
+ */
+function sanitizeUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== "string") return "";
+    try {
+        const u = new URL(rawUrl);
+        // Strip user:pass authentication credentials from URL (e.g., http://admin:admin@site.com)
+        u.username = "";
+        u.password = "";
+
+        // Strip hash fragment if it contains access tokens, sessions, or credentials
+        if (u.hash && /(token|session|auth|key|secret|pass)/i.test(u.hash)) {
+            u.hash = "#[REDACTED_HASH_FRAGMENT]";
+        }
+
+        // Sensitive query parameter names that must be redacted
+        const sensitiveParamRegex = /^(?:phpsessid|jsessionid|aspsessionid|connect\.sid|session_?id|sessid|sid|session|token|access_?token|id_?token|refresh_?token|csrf_?token|xsrf_?token|user_?token|csrftoken|auth|authtoken|auth_?token|key|api_?key|apikey|secret|password|passwd|pwd|pass|sig|signature|hash)$/i;
+
+        const keysToRedact = [];
+        u.searchParams.forEach((val, key) => {
+            if (sensitiveParamRegex.test(key) || /(?:session|token|auth|secret|pass|key)/i.test(key)) {
+                keysToRedact.push(key);
+            } else if (/^[a-f0-9]{24,64}$/i.test(val) || /^eyJ[A-Za-z0-9_-]+\./.test(val)) {
+                // Parameter value itself is a raw session token or JWT hash
+                keysToRedact.push(key);
+            }
+        });
+
+        keysToRedact.forEach(key => {
+            u.searchParams.set(key, "[REDACTED_SESSION_OR_SECRET]");
+        });
+
+        return u.toString();
+    } catch (e) {
+        // Fallback regex replacement for non-standard or partial URLs
+        return rawUrl
+            .replace(/\b(phpsessid|jsessionid|aspsessionid|session_?id|sessid|sid|token|csrf_?token|auth|key|secret|password|pwd)\b=[^&\s]+/gi, "$1=[REDACTED_SESSION_OR_SECRET]")
+            .replace(/:\/\/[^:]+:[^@]+@/, "://");
+    }
+}
+
+/**
+ * Strips common secrets, session IDs, auth tokens, passwords, and DOM code from strings.
+ * @param {string} reason 
+ * @returns {string} Sanitized string safe for AI prompts
+ */
 function sanitizeReason(reason) {
     if (typeof reason !== "string") {
         return "Security indicator detected";
@@ -23,22 +72,33 @@ function sanitizeReason(reason) {
     let value = reason.slice(0, 1000);
 
     return value
-        // Strip HTML tags and DOM elements
+        // Strip script tags and their inner content
+        .replace(/<script[\s\S]*?<\/script>/gi, "[SCRIPT_STRIPPED]")
+        // Strip all other HTML tags and DOM elements
         .replace(/<[^>]*>/g, "[DOM_ELEMENT]")
+        // Session IDs (PHPSESSID, JSESSIONID, ASPSESSIONID, connect.sid, session_id, sid)
+        .replace(/\b(phpsessid|jsessionid|aspsessionid|connect\.sid|session_?id|sessid|sid)\b\s*[:=]\s*["']?[^"' \t\r\n,;&]+["']?/gi, "$1=[REDACTED_SESSION_ID]")
+        // CSRF and anti-forgery tokens
+        .replace(/\b(csrf[_-]?token|xsrf[_-]?token|user[_-]?token|auth[_-]?token|authtoken)\b\s*[:=]\s*["']?[^"' \t\r\n,;&]+["']?/gi, "$1=[REDACTED_TOKEN]")
+        // Cookie headers and assignments
+        .replace(/\b(set-cookie|cookie)\b\s*[:=]\s*["']?[^"' \t\r\n]+["']?/gi, "$1=[REDACTED_COOKIE]")
         // JWT-like tokens
-        .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED]")
+        .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED_JWT]")
         // AWS access key IDs
-        .replace(/\bAKIA[0-9A-Z]{16}\b/g, "[REDACTED]")
-        // Authorization credentials
-        .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*/gi, "$1 [REDACTED]")
+        .replace(/\bAKIA[0-9A-Z]{16}\b/g, "[REDACTED_AWS_KEY]")
+        // Authorization credentials (Bearer, Basic)
+        .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*/gi, "$1 [REDACTED_AUTH]")
         // Secrets and API tokens: token=abc, api_key: "abc"
-        .replace(/\b(token|secret|api[_-]?key|access[_-]?token|client[_-]?secret)\b\s*[:=]\s*["']?[^"' \t\r\n,;]+["']?/gi, "$1=[REDACTED]")
-        // Password assignments
-        .replace(/\b(password|passwd|pwd)\b\s*[:=]\s*["']?[^"' \t\r\n,;]+["']?/gi, "$1=[REDACTED]")
+        .replace(/\b(token|secret|api[_-]?key|access[_-]?token|client[_-]?secret)\b\s*[:=]\s*["']?[^"' \t\r\n,;&]+["']?/gi, "$1=[REDACTED_SECRET]")
+        // Password assignments: password=..., passwd: "..."
+        .replace(/\b(password|passwd|pwd|pass)\b\s*[:=]\s*["']?[^"' \t\r\n,;&]+["']?/gi, "$1=[REDACTED_PASSWORD]")
+        // Input values and form values
+        .replace(/\b(value|val)\b\s*[:=]\s*["']?[^"' \t\r\n,;&]+["']?/gi, "$1=[REDACTED_VALUE]")
         // Email addresses
         .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
         // Common private-key block markers and contents
         .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/gi, "[REDACTED_PRIVATE_KEY]")
+        // Truncate to safe length
         .slice(0, 400);
 }
 
@@ -96,6 +156,16 @@ function sanitizeCorrelations(correlations) {
         .map(sanitizeReason);
 }
 
+/**
+ * Builds a strictly sanitized, minimal AI security payload.
+ * Guarantees:
+ * 1. Zero raw cookies, zero session IDs (PHPSESSID, JSESSIONID, etc.).
+ * 2. Zero raw HTML/DOM code trees, zero input values/typed text.
+ * 3. Stripped credentials, tokens, emails, and secrets.
+ * 4. All URLs pass through sanitizeUrl to strip session query parameters.
+ * @param {Object} scan Raw scan result from page
+ * @returns {Object} Cleaned, minimal payload safe for Gemini AI
+ */
 function buildAISecurityPayload(scan) {
     const source = scan || {};
     let pageUrl = source.url || "";
@@ -146,7 +216,7 @@ function buildAISecurityPayload(scan) {
     );
 
     return {
-        pageUrl: sanitizeReason(pageUrl).slice(0, 200),
+        pageUrl: sanitizeUrl(pageUrl).slice(0, 200),
         hostname,
         port,
         pathname,

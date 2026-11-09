@@ -1933,3 +1933,337 @@ h2::before {
     line-height: 1.5;
     color: #38bdf8;
 }
+
+
+/* ======================================================== */
+/* ETHICAL HACKER & SECURITY AUDITOR SUITE STYLES           */
+/* ======================================================== */
+
+.auditor-section {
+    background: rgba(13, 16, 26, 0.7);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-radius: 12px;
+    padding: 24px 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(10px);
+}
+
+.auditor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.auditor-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.auditor-title-group h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    color: #f1f5f9;
+}
+
+.auditor-badge {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.export-report-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(168, 85, 247, 0.35) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.25);
+    transition: all 0.25s ease;
+}
+
+.export-report-btn:hover {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.45) 0%, rgba(168, 85, 247, 0.55) 100%);
+    border-color: #ef4444;
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.5);
+    transform: translateY(-1px);
+}
+
+.auditor-subtitle {
+    margin: 0 0 20px 0;
+    font-size: 13px;
+    color: #94a3b8;
+    line-height: 1.5;
+}
+
+.auditor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.auditor-card {
+    background: #0b0e17;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+}
+
+.auditor-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.auditor-card-header h3 {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #e2e8f0;
+}
+
+.auditor-card-body {
+    font-size: 13px;
+    color: #cbd5e1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+/* Tech Stack Tags */
+.tech-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tech-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #38bdf8;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.tech-tag.category-cms {
+    background: rgba(234, 179, 8, 0.12);
+    border-color: rgba(234, 179, 8, 0.35);
+    color: #facc15;
+}
+
+.tech-tag.category-backend {
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.35);
+    color: #4ade80;
+}
+
+.tech-tag.category-server {
+    background: rgba(249, 115, 22, 0.12);
+    border-color: rgba(249, 115, 22, 0.35);
+    color: #fb923c;
+}
+
+.tech-tag em {
+    font-style: normal;
+    font-size: 10.5px;
+    opacity: 0.8;
+}
+
+/* Attack Surface Items */
+.surface-list-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.surface-subheading {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #94a3b8;
+    margin-top: 4px;
+}
+
+.route-pill {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 11.5px;
+    background: rgba(168, 85, 247, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    color: #d8b4fe;
+    padding: 3px 8px;
+    border-radius: 4px;
+    word-break: break-all;
+}
+
+.hidden-input-pill {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 11.5px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.comment-leak-box {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 11px;
+    background: rgba(234, 179, 8, 0.08);
+    border-left: 3px solid #eab308;
+    color: #fef08a;
+    padding: 6px 10px;
+    border-radius: 4px;
+    word-break: break-all;
+}
+
+/* Header & Cookie Status */
+.hygiene-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+    font-size: 12.5px;
+}
+
+.hygiene-badge-good {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+.hygiene-badge-warn {
+    background: rgba(234, 179, 8, 0.15);
+    color: #facc15;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+.hygiene-badge-bad {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+/* Modal CVSS & Auditor Guide Styles */
+.cvss-strip {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: #0b0e17;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+}
+
+.cvss-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cvss-label {
+    font-size: 11.5px;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.cvss-score-pill {
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.cvss-score-pill.cvss-critical {
+    background: rgba(239, 68, 68, 0.25);
+    border: 1px solid #ef4444;
+    color: #ff8080;
+}
+
+.cvss-score-pill.cvss-high {
+    background: rgba(249, 115, 22, 0.25);
+    border: 1px solid #f97316;
+    color: #fb923c;
+}
+
+.cvss-score-pill.cvss-medium {
+    background: rgba(234, 179, 8, 0.25);
+    border: 1px solid #eab308;
+    color: #facc15;
+}
+
+.cvss-vector-code {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #e2e8f0;
+}
+
+.auditor-guide-box {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    background: #090c14;
+    border-left: 3px solid #a855f7;
+    color: #e2e8f0;
+    white-space: pre-wrap;
+    padding: 12px 14px;
+    border-radius: 6px;
+}
+
+.empty-hint {
+    color: #64748b;
+    font-style: italic;
+    font-size: 12px;
+}
