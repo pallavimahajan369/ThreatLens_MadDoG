@@ -1,4 +1,3 @@
-console.log("ThreatLens Phishing Security Engine loaded");
 
 
 function analyzePhishingRisk(

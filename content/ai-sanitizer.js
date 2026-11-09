@@ -1,4 +1,3 @@
-console.log("ThreatLens AI Sanitizer loaded");
 
 // Allow only known security levels.
 const ALLOWED_RISKS = new Set([

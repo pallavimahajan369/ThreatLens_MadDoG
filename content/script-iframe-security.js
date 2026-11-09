@@ -1,4 +1,3 @@
-console.log("ThreatLens Script & Iframe Security Engine loaded");
 
 function getScriptDomPath(el) {
     if (!el || !el.tagName) return "";

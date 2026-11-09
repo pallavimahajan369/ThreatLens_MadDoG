@@ -1,4 +1,3 @@
-console.log("ThreatLens Security Auditor & Recon Suite loaded");
 
 /**
  * Performs passive, client-side ethical security auditing and attack surface reconnaissance:

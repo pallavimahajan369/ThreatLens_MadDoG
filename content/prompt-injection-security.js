@@ -1,4 +1,3 @@
-console.log("ThreatLens Prompt Injection Security Engine loaded");
 
 
 function analyzePromptInjection() {

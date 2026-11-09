@@ -1,4 +1,3 @@
-console.log("ThreatLens Form Security Engine loaded");
 
 function getFormDomPath(el) {
     if (!el || !el.tagName) return "";

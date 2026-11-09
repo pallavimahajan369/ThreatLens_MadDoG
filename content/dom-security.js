@@ -1,4 +1,3 @@
-console.log("ThreatLens DOM Security Engine loaded");
 
 function getDomSecurityDomPath(el) {
     if (!el || !el.tagName) return "";

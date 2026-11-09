@@ -1,4 +1,5 @@
 importScripts("../content/ai-sanitizer.js");
+importScripts("../content/siem-engine.js");
 
 console.log("ThreatLens service worker started");
 
@@ -409,6 +410,20 @@ chrome.runtime.onMessage.addListener(
         }
 
         console.log("ThreatLens Service Worker received message:", message.type);
+
+        // ==================================
+        // CLEAR SIEM LOGS
+        // ==================================
+        if (message.type === "CLEAR_SIEM_LOGS") {
+            (async () => {
+                await setStorage({
+                    siem_events_log: [],
+                    siem_incidents: []
+                });
+                sendResponse({ success: true });
+            })();
+            return true;
+        }
 
         // ==================================
         // TEST AI CONNECTION
@@ -867,7 +882,7 @@ chrome.runtime.onMessage.addListener(
 
                                     chrome.storage.local.get(
                                         "privacyMode",
-                                        (privacyResult) => {
+                                        async (privacyResult) => {
 
                                             const privacyMode =
                                                 privacyResult.privacyMode === true;
@@ -897,6 +912,43 @@ chrome.runtime.onMessage.addListener(
                                         // All vulnerability detection, heuristic checks, and threat
                                         // syntheses execute strictly inside the local client sandbox.
                                         const localExplanation = synthesizeLocalDeepExplanation(aiPayload);
+
+                                        // ==========================================
+                                        // CLIENT-SIDE SIEM EVENT ENGINE
+                                        // ==========================================
+                                        try {
+                                            if (typeof generateSiemEventsFromScan === "function") {
+                                                const scanWithExtensions = {
+                                                    ...message.data,
+                                                    extensionScan: extensionsData
+                                                };
+                                                const newEvents = generateSiemEventsFromScan(scanWithExtensions);
+                                                const existingData = await getStorage(["siem_events_log"]);
+                                                const history = Array.isArray(existingData.siem_events_log) ? existingData.siem_events_log : [];
+
+                                                // Prepend new events, keep up to 300 latest
+                                                const combined = [...newEvents, ...history];
+                                                const uniqueEvents = [];
+                                                const seenKeys = new Set();
+                                                for (const ev of combined) {
+                                                    const key = `${ev.eventType}_${ev.target?.hostname}_${ev.target?.component}_${ev.ruleId}`;
+                                                    if (!seenKeys.has(key) || (Date.now() - ev.epoch > 30000)) {
+                                                        seenKeys.add(key);
+                                                        uniqueEvents.push(ev);
+                                                    }
+                                                    if (uniqueEvents.length >= 300) break;
+                                                }
+                                                const correlatedIncidents = typeof correlateSiemEvents === "function" ? correlateSiemEvents(uniqueEvents) : [];
+                                                await setStorage({
+                                                    siem_events_log: uniqueEvents,
+                                                    siem_incidents: correlatedIncidents,
+                                                    [`siem_events_${tabId}`]: newEvents
+                                                });
+                                            }
+                                        } catch (siemErr) {
+                                            console.warn("ThreatLens SIEM processing error:", siemErr);
+                                        }
+
                                         chrome.storage.local.set({
                                             [`ai_analysis_${tabId}`]: {
                                                 success: true,

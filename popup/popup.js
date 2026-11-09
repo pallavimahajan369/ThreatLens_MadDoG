@@ -1,4 +1,3 @@
-console.log("ThreatLens Popup script loaded");
 
 const informationalTypes = [
     "NO_SUSPICIOUS_DOM_PATTERN",

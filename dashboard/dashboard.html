@@ -214,6 +214,118 @@
         <!-- ========================= -->
         <!-- AI NEURAL ANALYSIS        -->
         <!-- ========================= -->
+                <!-- ========================= -->
+        <!-- SOC & SIEM CONSOLE        -->
+        <!-- ========================= -->
+        <section class="siem-section" id="siemSection">
+            <div class="siem-header">
+                <div class="siem-title-group">
+                    <div class="siem-badge-row">
+                        <span class="siem-tag">CLIENT-SIDE SIEM</span>
+                        <span class="siem-status-pill">🟢 LOCAL SOC ACTIVE</span>
+                    </div>
+                    <h2>SOC &amp; SIEM Intelligence Console</h2>
+                    <p class="siem-desc">Real-time local event logging, MITRE ATT&amp;CK® threat mapping, and multi-stage incident correlation. Zero data leaves your browser.</p>
+                </div>
+                <div class="siem-actions">
+                    <button id="exportCefBtn" class="siem-btn cef-btn" type="button" title="Export Common Event Format log for Splunk / ArcSight">
+                        <span class="btn-icon">📥</span> Export CEF (Splunk)
+                    </button>
+                    <button id="exportJsonlBtn" class="siem-btn jsonl-btn" type="button" title="Export JSON Lines for Elastic SIEM">
+                        <span class="btn-icon">📥</span> Export JSONL (ELK)
+                    </button>
+                    <button id="exportSyslogBtn" class="siem-btn syslog-btn" type="button" title="Export RFC-5424 Syslog stream">
+                        <span class="btn-icon">📄</span> Export Syslog
+                    </button>
+                    <button id="clearSiemLogsBtn" class="siem-btn clear-btn" type="button" title="Clear recorded SIEM events">
+                        <span class="btn-icon">🧹</span> Clear Logs
+                    </button>
+                </div>
+            </div>
+
+            <!-- SIEM Metrics -->
+            <div class="siem-metrics-grid">
+                <div class="siem-metric-card">
+                    <span class="metric-label">Total Events Logged</span>
+                    <strong id="siemTotalEvents" class="metric-val">0</strong>
+                </div>
+                <div class="siem-metric-card">
+                    <span class="metric-label">Correlated Incidents</span>
+                    <strong id="siemCorrelatedIncidents" class="metric-val alert-val">0</strong>
+                </div>
+                <div class="siem-metric-card">
+                    <span class="metric-label">High / Critical Alerts</span>
+                    <strong id="siemCriticalAlerts" class="metric-val danger-val">0</strong>
+                </div>
+                <div class="siem-metric-card">
+                    <span class="metric-label">Top MITRE Technique</span>
+                    <strong id="siemTopMitre" class="metric-val mitre-val">None</strong>
+                </div>
+            </div>
+
+            <!-- Correlated Incidents Panel -->
+            <div class="siem-incidents-panel">
+                <div class="siem-sub-header">
+                    <h3>⚡ Correlated Multi-Stage Incidents</h3>
+                    <span class="sub-hint">Automated heuristic kill-chain correlation</span>
+                </div>
+                <div id="siemIncidentsList" class="incidents-list">
+                    <div class="empty-hint">No multi-stage incidents correlated yet. Clean security posture.</div>
+                </div>
+            </div>
+
+            <!-- MITRE ATT&CK Matrix Alignment -->
+            <div class="siem-mitre-panel">
+                <div class="siem-sub-header">
+                    <h3>🎯 MITRE ATT&amp;CK® Enterprise Matrix Alignment</h3>
+                    <span class="sub-hint">Detected techniques mapped to tactical kill-chain phases</span>
+                </div>
+                <div id="siemMitreTags" class="mitre-tags-container">
+                    <span class="empty-hint">Evaluating MITRE ATT&amp;CK tactics...</span>
+                </div>
+            </div>
+
+            <!-- Live SOC Event Feed Table -->
+            <div class="siem-feed-panel">
+                <div class="siem-feed-controls">
+                    <div class="feed-title-wrap">
+                        <h3>📋 Real-Time Security Event Stream</h3>
+                        <span id="siemEventCountBadge" class="feed-badge">0 events</span>
+                    </div>
+                    <div class="feed-filters">
+                        <select id="siemSeverityFilter" class="siem-select">
+                            <option value="ALL">All Severities</option>
+                            <option value="CRITICAL">Critical Only</option>
+                            <option value="HIGH">High &amp; Critical</option>
+                            <option value="MEDIUM">Medium+</option>
+                            <option value="LOW">Low / Info</option>
+                        </select>
+                        <input type="text" id="siemSearchFilter" class="siem-input" placeholder="Search event type, target, or MITRE ID..." />
+                    </div>
+                </div>
+
+                <div class="siem-table-container">
+                    <table class="siem-table" id="siemEventsTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Severity</th>
+                                <th>MITRE ATT&amp;CK</th>
+                                <th>Event Type</th>
+                                <th>Target / Location</th>
+                                <th>Finding Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody id="siemEventsTbody">
+                            <tr>
+                                <td colspan="6" class="empty-cell">Listening for browser security events...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
         <section class="ai-section">
             <div class="ai-section-header">
                 <h2>AI Neural Analysis</h2>
@@ -495,6 +607,7 @@
 
     <script src="../content/cve-registry.js"></script>
     <script src="../content/security-auditor.js"></script>
+    <script src="../content/siem-engine.js"></script>
     <script src="dashboard.js"></script>
 
 </body>

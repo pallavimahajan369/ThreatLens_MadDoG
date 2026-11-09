@@ -1,4 +1,3 @@
-console.log("ThreatLens Dashboard loaded");
 
 const params = new URLSearchParams(window.location.search);
 const tabId = params.get("tabId");
@@ -1468,7 +1467,240 @@ function generateAndDownloadAuditReport() {
     setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
 }
 
-function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
+// =========================================================
+// SOC & SIEM INTELLIGENCE CONSOLE LOGIC
+// =========================================================
+
+let currentSiemEventsList = [];
+let activeSiemIncidents = [];
+
+function renderSiemConsole(scan, storedEvents = [], storedIncidents = []) {
+    let events = Array.isArray(storedEvents) && storedEvents.length > 0 ? storedEvents : [];
+    if (events.length === 0 && scan && typeof generateSiemEventsFromScan === "function") {
+        events = generateSiemEventsFromScan(scan);
+    }
+    currentSiemEventsList = events;
+
+    let incidents = Array.isArray(storedIncidents) && storedIncidents.length > 0 ? storedIncidents : [];
+    if (incidents.length === 0 && events.length > 0 && typeof correlateSiemEvents === "function") {
+        incidents = correlateSiemEvents(events);
+    }
+    activeSiemIncidents = incidents;
+
+    // 1. Metrics Bar
+    const totalEl = document.getElementById("siemTotalEvents");
+    const incEl = document.getElementById("siemCorrelatedIncidents");
+    const critEl = document.getElementById("siemCriticalAlerts");
+    const topMitreEl = document.getElementById("siemTopMitre");
+
+    if (totalEl) totalEl.textContent = events.length;
+    if (incEl) incEl.textContent = incidents.length;
+    if (critEl) {
+        const critCount = events.filter(e => e.severity === "CRITICAL" || e.severity === "HIGH").length;
+        critEl.textContent = critCount;
+    }
+
+    if (topMitreEl) {
+        if (events.length === 0) {
+            topMitreEl.textContent = "None";
+        } else {
+            const freq = {};
+            events.forEach(e => {
+                const id = e.mitre?.techniqueId || "T1082";
+                freq[id] = (freq[id] || 0) + 1;
+            });
+            const topId = Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b, "");
+            topMitreEl.textContent = topId || "None";
+        }
+    }
+
+    // 2. Correlated Incidents Panel
+    const incListEl = document.getElementById("siemIncidentsList");
+    if (incListEl) {
+        if (incidents.length === 0) {
+            incListEl.innerHTML = '<div class="empty-hint">No multi-stage incidents correlated yet. Clean security posture.</div>';
+        } else {
+            incListEl.innerHTML = incidents.map(inc => `
+                <div class="incident-card ${inc.severity === "HIGH" ? "sev-high" : ""}">
+                    <div class="incident-top">
+                        <span class="incident-id-badge">${inc.incidentId}</span>
+                        <span class="${inc.severity === "CRITICAL" ? "badge-crit" : "badge-high"}">${inc.severity} INCIDENT</span>
+                    </div>
+                    <div class="incident-title">${escapeHtml(inc.title)}</div>
+                    <div class="incident-tactics">
+                        ${(inc.mitreTactics || []).map(t => `<span class="tactic-chip">${escapeHtml(t)}</span>`).join("")}
+                    </div>
+                    <div class="incident-summary">${escapeHtml(inc.summary)}</div>
+                    <div class="incident-soc-action"><strong>SOC Action:</strong> ${escapeHtml(inc.socAction)}</div>
+                </div>
+            `).join("");
+        }
+    }
+
+    // 3. MITRE ATT&CK Matrix Alignment
+    const mitreTagsEl = document.getElementById("siemMitreTags");
+    if (mitreTagsEl) {
+        const uniqueTechniques = new Map();
+        events.forEach(e => {
+            if (e.mitre && e.mitre.techniqueId) {
+                if (!uniqueTechniques.has(e.mitre.techniqueId)) {
+                    uniqueTechniques.set(e.mitre.techniqueId, e.mitre);
+                }
+            }
+        });
+
+        if (uniqueTechniques.size === 0) {
+            mitreTagsEl.innerHTML = '<span class="empty-hint">No malicious technique signatures observed.</span>';
+        } else {
+            mitreTagsEl.innerHTML = Array.from(uniqueTechniques.values()).map(m => `
+                <div class="mitre-technique-pill" title="${escapeHtml(m.techniqueName)}">
+                    <span class="mitre-tactic-badge">${escapeHtml(m.tactic || "Tactics")}</span>
+                    <span class="mitre-id">${escapeHtml(m.techniqueId)}</span>
+                    <span class="mitre-name">${escapeHtml(m.techniqueName)}</span>
+                </div>
+            `).join("");
+        }
+    }
+
+    // 4. Update Event Feed Table
+    updateSiemEventTable();
+}
+
+function updateSiemEventTable() {
+    const tbody = document.getElementById("siemEventsTbody");
+    const badge = document.getElementById("siemEventCountBadge");
+    const sevFilter = (document.getElementById("siemSeverityFilter")?.value || "ALL").toUpperCase();
+    const searchFilter = (document.getElementById("siemSearchFilter")?.value || "").toLowerCase().trim();
+
+    if (!tbody) return;
+
+    let filtered = currentSiemEventsList.filter(e => {
+        if (sevFilter === "CRITICAL" && e.severity !== "CRITICAL") return false;
+        if (sevFilter === "HIGH" && e.severity !== "CRITICAL" && e.severity !== "HIGH") return false;
+        if (sevFilter === "MEDIUM" && (e.severity === "LOW" || e.severity === "INFO")) return false;
+        if (sevFilter === "LOW" && e.severity !== "LOW" && e.severity !== "INFO") return false;
+
+        if (searchFilter) {
+            const haystack = `${e.eventType} ${e.message} ${e.mitre?.techniqueId} ${e.target?.hostname} ${e.target?.component}`.toLowerCase();
+            if (!haystack.includes(searchFilter)) return false;
+        }
+
+        return true;
+    });
+
+    if (badge) badge.textContent = `${filtered.length} of ${currentSiemEventsList.length} events`;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">No security events match the active filter.</td></tr>';
+        return;
+    }
+
+    function getBadgeClass(sev) {
+        switch (String(sev || "").toUpperCase()) {
+            case "CRITICAL": return "badge-crit";
+            case "HIGH": return "badge-high";
+            case "MEDIUM": return "badge-med";
+            default: return "badge-low";
+        }
+    }
+
+    tbody.innerHTML = filtered.map(e => {
+        const timeStr = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : "--:--:--";
+        const locStr = e.target ? `${e.target.hostname}:${e.target.port}${e.target.pathname}` : "local";
+        return `
+            <tr>
+                <td class="time-cell">${timeStr}</td>
+                <td><span class="${getBadgeClass(e.severity)}">${escapeHtml(e.severity)}</span></td>
+                <td><span class="mitre-id">${escapeHtml(e.mitre?.techniqueId || "T1082")}</span></td>
+                <td><strong>${escapeHtml(e.eventType)}</strong></td>
+                <td class="target-cell" title="${escapeHtml(e.target?.component || "")}">${escapeHtml(locStr)}</td>
+                <td>${escapeHtml(e.message)}</td>
+            </tr>
+        `;
+    }).join("");
+}
+
+// Download Helper for Standard SIEM Formats
+function downloadSiemFile(content, fileName, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 100);
+}
+
+// SIEM Filter Event Listeners
+const siemSevFilterEl = document.getElementById("siemSeverityFilter");
+if (siemSevFilterEl) {
+    siemSevFilterEl.addEventListener("change", updateSiemEventTable);
+}
+
+const siemSearchFilterEl = document.getElementById("siemSearchFilter");
+if (siemSearchFilterEl) {
+    siemSearchFilterEl.addEventListener("input", updateSiemEventTable);
+}
+
+// SIEM Exporter Buttons
+const exportCefBtn = document.getElementById("exportCefBtn");
+if (exportCefBtn) {
+    exportCefBtn.addEventListener("click", () => {
+        if (typeof exportToCef === "function") {
+            const data = exportToCef(currentSiemEventsList);
+            downloadSiemFile(data, `threatlens_events_${Date.now()}.cef`, "text/plain");
+        }
+    });
+}
+
+const exportJsonlBtn = document.getElementById("exportJsonlBtn");
+if (exportJsonlBtn) {
+    exportJsonlBtn.addEventListener("click", () => {
+        if (typeof exportToJsonl === "function") {
+            const data = exportToJsonl(currentSiemEventsList);
+            downloadSiemFile(data, `threatlens_events_${Date.now()}.jsonl`, "application/json");
+        }
+    });
+}
+
+const exportSyslogBtn = document.getElementById("exportSyslogBtn");
+if (exportSyslogBtn) {
+    exportSyslogBtn.addEventListener("click", () => {
+        if (typeof exportToSyslog === "function") {
+            const data = exportToSyslog(currentSiemEventsList);
+            downloadSiemFile(data, `threatlens_syslog_${Date.now()}.log`, "text/plain");
+        }
+    });
+}
+
+// Clear SIEM Logs Button
+const clearSiemLogsBtn = document.getElementById("clearSiemLogsBtn");
+if (clearSiemLogsBtn) {
+    clearSiemLogsBtn.addEventListener("click", () => {
+        if (confirm("Are you sure you want to clear all recorded SIEM security events?")) {
+            chrome.runtime.sendMessage({ type: "CLEAR_SIEM_LOGS" }, () => {
+                chrome.storage.local.set({ siem_events_log: [], siem_incidents: [] }, () => {
+                    currentSiemEventsList = [];
+                    activeSiemIncidents = [];
+                    renderSiemConsole(lastRenderedScan, [], []);
+                });
+            });
+        }
+    });
+}
+
+
+// Ensure window attachment
+if (typeof window !== 'undefined') {
+    window.renderSiemConsole = renderSiemConsole;
+    window.updateSiemEventTable = updateSiemEventTable;
+}
+
+function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl, siemEvents = [], siemIncidents = []) {
     const isRestricted = isRestrictedUrl(pageUrl);
     const safeScan = scan || {};
     const safeExtensionScan = Array.isArray(extensionScan) ? extensionScan : [];
@@ -1478,8 +1710,7 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
     lastRenderedAiAnalysis = aiAnalysis;
     lastRenderedPageUrl = pageUrl;
 
-    // Render Auditor Suite
-    renderAuditorSuite(safeScan);
+    // Primary UI elements render first; Auditor Suite & SIEM Console render safely at function end
 
 
     // ----------------------------------
@@ -1841,6 +2072,25 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl) {
             aiDataAtRiskWrapper.style.display = "none";
         }
     }
+
+    // =========================================================
+    // AUDITOR SUITE & CLIENT SIEM CONSOLE (RENDER SAFELY AT END)
+    // =========================================================
+    try {
+        if (typeof renderAuditorSuite === "function") {
+            renderAuditorSuite(safeScan);
+        }
+    } catch (audErr) {
+        console.error("ThreatLens Auditor render error:", audErr);
+    }
+
+    try {
+        if (typeof renderSiemConsole === "function") {
+            renderSiemConsole(safeScan, siemEvents, siemIncidents);
+        }
+    } catch (siemErr) {
+        console.error("ThreatLens SIEM render error:", siemErr);
+    }
 }
 
 function loadDashboardData() {
@@ -1851,26 +2101,29 @@ function loadDashboardData() {
             "extensionScan",
             tabId ? `ai_analysis_${tabId}` : null,
             "latest_ai_analysis",
-            "privacyMode"
+            "privacyMode",
+            "siem_events_log",
+            "siem_incidents",
+            tabId ? `siem_events_${tabId}` : null
         ].filter(Boolean),
         (result) => {
             let scan = null;
             const tabScan = tabId ? result[`scan_${tabId}`] : null;
 
-            // Only use tabScan if it matches the requested URL origin
             if (tabScan && (!currentWebsite || isSamePage(tabScan.url, currentWebsite))) {
                 scan = tabScan;
-            }
-
-            // Only fallback to lastScan if it genuinely belongs to this website
-            if (!scan && result.lastScan && currentWebsite && isSamePage(result.lastScan.url, currentWebsite)) {
+            } else if (result.lastScan && (!currentWebsite || isSamePage(result.lastScan.url, currentWebsite))) {
+                scan = result.lastScan;
+            } else if (tabScan) {
+                scan = tabScan;
+            } else if (result.lastScan) {
                 scan = result.lastScan;
             }
 
             const extensionScan = result.extensionScan || [];
             const aiAnalysis =
                 (tabId ? result[`ai_analysis_${tabId}`] : null) || result.latest_ai_analysis || null;
-            const pageUrl = currentWebsite || scan?.url || "Unknown";
+            const pageUrl = currentWebsite || scan?.url || result.lastScan?.url || "Unknown";
 
             // If no scan exists for this specific website yet, request live scan from tab content script
             if (!scan && tabId) {
@@ -1899,11 +2152,15 @@ function loadDashboardData() {
                 }
             }
 
+            const siemEvents = (tabId ? result[`siem_events_${tabId}`] : null) || result.siem_events_log || [];
+            const siemIncidents = result.siem_incidents || [];
             renderDashboardWithScan(
                 scan,
                 extensionScan,
                 aiAnalysis,
-                pageUrl
+                pageUrl,
+                siemEvents,
+                siemIncidents
             );
         }
     );
@@ -1920,7 +2177,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
             changes.lastScan ||
             (tabId && changes[`ai_analysis_${tabId}`]) ||
             changes.latest_ai_analysis ||
-            changes.extensionScan
+            changes.extensionScan ||
+            changes.siem_events_log ||
+            changes.siem_incidents
         ) {
             console.log("ThreatLens: Storage updated, re-rendering dashboard");
             loadDashboardData();

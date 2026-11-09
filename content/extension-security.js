@@ -1,4 +1,3 @@
-console.log("ThreatLens Extension Security Engine loaded");
 
 
 function analyzeExtensionSecurity(extension) {

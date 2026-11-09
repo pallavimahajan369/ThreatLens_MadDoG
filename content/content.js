@@ -144,8 +144,6 @@ function scanPage(reason = "page-load") {
         }
         result.risk = riskResult;
 
-        console.log("ThreatLens Scan Result:", result);
-
         if (!chrome.runtime?.id) {
             return result;
         }
@@ -164,10 +162,6 @@ function scanPage(reason = "page-load") {
                         );
                         return;
                     }
-                    console.log(
-                        "ThreatLens: Service Worker response:",
-                        response
-                    );
                 }
             );
         } catch (msgErr) {
@@ -183,7 +177,6 @@ function scanPage(reason = "page-load") {
 // Listen for on-demand scan requests (from popup or dashboard)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request && (request.action === "REQUEST_SCAN" || request.type === "REQUEST_SCAN")) {
-        console.log("ThreatLens: Handling on-demand REQUEST_SCAN");
         const res = scanPage("on-demand");
         sendResponse({ success: true, data: res });
         return true;
@@ -264,10 +257,6 @@ const domObserver =
 
             scanScheduled = true;
 
-            console.log(
-                "ThreatLens: Relevant DOM mutation detected. Re-scanning..."
-            );
-
             scanPage("dom-mutation");
 
             scanScheduled = false;
@@ -283,9 +272,5 @@ if (document.documentElement) {
             childList: true,
             subtree: true
         }
-    );
-
-    console.log(
-        "ThreatLens: MutationObserver started"
     );
 }

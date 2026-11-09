@@ -1,6 +1,3 @@
-    console.log(
-        "ThreatLens Sensitive Data Security Engine loaded"
-    );
 
 
     // =========================================

@@ -1,4 +1,3 @@
-console.log("ThreatLens URL Security Engine loaded");
 
 
 // ======================================
