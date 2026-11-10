@@ -50,7 +50,7 @@ function getResourceFileName(urlStr) {
     }
 }
 
-function analyzeDOM() {
+function analyzeDOM(providedCsp = null) {
     const findings = [];
     const currentPageUrl = window.location.href;
     const docFile = getDomDocumentFileName();
@@ -179,10 +179,11 @@ function analyzeDOM() {
     });
 
     if (passwordCount > 0) {
+        const isHttp = currentPageUrl.startsWith("http://");
         findings.push({
             category: "DOM",
             type: "PASSWORD_FIELD",
-            severity: "MEDIUM",
+            severity: isHttp ? "HIGH" : "LOW",
             reason: `${passwordCount} password field(s) detected`,
             details: {
                 title: "Password Input Fields Detected",
@@ -197,7 +198,7 @@ function analyzeDOM() {
         findings.push({
             category: "DOM",
             type: "SENSITIVE_INPUT",
-            severity: "MEDIUM",
+            severity: "LOW",
             reason: `${sensitiveCount} potentially sensitive input(s) detected`,
             details: {
                 title: "Sensitive User Input Fields Detected",
@@ -422,10 +423,12 @@ function analyzeDOM() {
     }
 
     if (dangerousSinkCount > 0) {
+        const isCspStrict = providedCsp && providedCsp.isActive && providedCsp.isStrictScript;
         findings.push({
             category: "DOM",
             type: "DANGEROUS_DOM_SINK",
-            severity: "MEDIUM",
+            severity: isCspStrict ? "LOW" : "LOW",
+            isMitigated: isCspStrict,
             reason: `${dangerousSinkCount} potentially dangerous DOM sink reference(s) detected`,
             details: {
                 title: "Dangerous DOM Sinks Detected",

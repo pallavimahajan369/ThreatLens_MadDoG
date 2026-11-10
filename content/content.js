@@ -2,6 +2,16 @@ function scanPage(reason = "page-load") {
     try {
         const currentURL = window.location.href;
 
+        // Detect active Content Security Policy (meta tag or window headers)
+        let activeCsp = null;
+        try {
+            if (typeof detectAndParseActiveCsp === "function") {
+                activeCsp = detectAndParseActiveCsp();
+            }
+        } catch (e) {
+            activeCsp = null;
+        }
+
         // ===============================
         // BASIC PAGE INFORMATION
         // ===============================
@@ -31,7 +41,7 @@ function scanPage(reason = "page-load") {
         // ===============================
         let domFindings = [];
         try {
-            domFindings = analyzeDOM();
+            domFindings = analyzeDOM(activeCsp);
         } catch (e) {
             console.error("ThreatLens: analyzeDOM error:", e);
         }
@@ -53,7 +63,7 @@ function scanPage(reason = "page-load") {
         // ===============================
         let scriptIframeFindings = [];
         try {
-            scriptIframeFindings = analyzeScriptIframeSecurity();
+            scriptIframeFindings = analyzeScriptIframeSecurity(activeCsp);
         } catch (e) {
             console.error("ThreatLens: analyzeScriptIframeSecurity error:", e);
         }
@@ -76,7 +86,7 @@ function scanPage(reason = "page-load") {
         let webVulnerabilityFindings = [];
         try {
             if (typeof analyzeWebVulnerabilities === "function") {
-                webVulnerabilityFindings = analyzeWebVulnerabilities();
+                webVulnerabilityFindings = analyzeWebVulnerabilities(activeCsp);
             }
         } catch (e) {
             console.error("ThreatLens: analyzeWebVulnerabilities error:", e);
@@ -122,6 +132,17 @@ function scanPage(reason = "page-load") {
             console.error("ThreatLens: analyzeSecurityAudit error:", e);
         }
         result.securityAudit = securityAudit;
+
+        // ===============================
+        // APPLY CSP MITIGATIONS (BEFORE OVERALL RISK CALCULATION)
+        // ===============================
+        if (activeCsp && activeCsp.isActive && typeof applyCspMitigations === "function") {
+            try {
+                applyCspMitigations(result, activeCsp);
+            } catch (e) {
+                console.error("ThreatLens: applyCspMitigations error:", e);
+            }
+        }
 
         // ===============================
         // RISK ENGINE
@@ -182,6 +203,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 });
+
+// Query live HTTP response headers (e.g. CSP) from background service worker
+try {
+    if (chrome.runtime?.id) {
+        chrome.runtime.sendMessage({ type: "GET_SECURITY_HEADERS" }, (resp) => {
+            if (resp && resp.headers) {
+                if (typeof window !== "undefined") {
+                    window.__threatlens_headers = resp.headers;
+                }
+                const currentCsp = typeof detectAndParseActiveCsp === "function" ? detectAndParseActiveCsp() : null;
+                if (currentCsp && currentCsp.isActive) {
+                    scanPage("headers-loaded");
+                }
+            }
+        });
+    }
+} catch (e) {}
 
 // START INITIAL SCAN
 scanPage("page-load");

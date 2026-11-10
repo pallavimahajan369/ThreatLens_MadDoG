@@ -7,6 +7,207 @@
  * 4. CVSS v3.1 scoring and ethical verification guides.
  * @returns {Object} Comprehensive security audit results
  */
+
+// ============================================================================
+// CONTENT SECURITY POLICY (CSP) ANALYSIS & PARSER
+// ============================================================================
+
+/**
+ * Standardized Content Security Policy parser & effectiveness analyzer.
+ * Evaluates whether an active CSP policy successfully mitigates XSS, DOM sinks, and dynamic eval.
+ * @param {string} cspString Raw CSP string from HTTP header or meta tag
+ * @param {string} source "HTTP Header" | "Meta Tag"
+ * @returns {Object|null}
+ */
+function parseCspString(cspString, source = "HTTP Header") {
+    if (!cspString || typeof cspString !== "string") return null;
+    const directives = {};
+    const parts = cspString.split(";");
+    for (const part of parts) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+        const tokens = trimmed.split(/\s+/);
+        const name = tokens[0].toLowerCase();
+        const values = tokens.slice(1).map(v => v.toLowerCase().replace(/['"]/g, ""));
+        directives[name] = values;
+    }
+
+    const scriptSrc = directives["script-src"] || directives["script-src-elem"] || directives["default-src"] || [];
+    const objectSrc = directives["object-src"] || directives["default-src"] || [];
+    const frameAncestors = directives["frame-ancestors"] || [];
+
+    const hasUnsafeInline = scriptSrc.includes("unsafe-inline");
+    const hasUnsafeEval = scriptSrc.includes("unsafe-eval");
+    const hasWildcardScript = scriptSrc.includes("*") || scriptSrc.includes("https:") || scriptSrc.includes("http:");
+    const hasNonceOrHash = scriptSrc.some(v => v.startsWith("nonce-") || v.startsWith("sha256-") || v.startsWith("sha384-") || v.startsWith("sha512-"));
+
+    const bypassDomains = ["pastebin.com", "hastebin.com", "raw.githubusercontent.com", "api.github.com", "ajax.googleapis.com", "cdnjs.cloudflare.com"];
+    const matchedBypassDomains = scriptSrc.filter(s => bypassDomains.some(bd => s.includes(bd)));
+    const isBypassable = hasUnsafeInline || hasWildcardScript || matchedBypassDomains.length > 0;
+
+    let bypassReason = "";
+    if (hasUnsafeInline) bypassReason = "Allows 'unsafe-inline' script execution";
+    else if (hasWildcardScript) bypassReason = "Permissive wildcard script source (* or https:)";
+    else if (matchedBypassDomains.length > 0) bypassReason = `Permits script injection via hosted payload source (${matchedBypassDomains.join(", ")})`;
+
+    const isStrictScript = scriptSrc.length > 0 && !hasUnsafeInline && !hasWildcardScript;
+    const blocksEval = scriptSrc.length > 0 && !hasUnsafeEval;
+    const blocksObjects = objectSrc.includes("none") || (objectSrc.length > 0 && !objectSrc.includes("*"));
+
+    let summary = "Permissive CSP";
+    if (isStrictScript) {
+        summary = hasNonceOrHash ? "Strict Nonce/Hash CSP" : "Strict Self CSP (Inline Blocked)";
+    } else if (hasUnsafeInline) {
+        summary = "Permissive CSP (Allows 'unsafe-inline')";
+    } else if (scriptSrc.length > 0) {
+        summary = "Custom Origin CSP";
+    }
+
+    return {
+        raw: cspString,
+        source: source,
+        directives,
+        scriptSrc,
+        hasUnsafeInline,
+        hasUnsafeEval,
+        hasNonceOrHash,
+        isStrictScript,
+        blocksEval,
+        blocksObjects,
+        isBypassable,
+        bypassReason,
+        summary,
+        isActive: Object.keys(directives).length > 0
+    };
+}
+
+/**
+ * Detects active CSP from document meta tags or cached window headers.
+ * @returns {Object|null}
+ */
+function detectAndParseActiveCsp() {
+    // 1. Check window headers injected by background / content script
+    if (typeof window !== "undefined" && window.__threatlens_headers && window.__threatlens_headers.csp) {
+        return parseCspString(window.__threatlens_headers.csp, "HTTP Header");
+    }
+
+    // 2. Check meta tags in DOM
+    if (typeof document !== "undefined" && typeof document.querySelector === "function") {
+        const cspMeta = document.querySelector("meta[http-equiv='Content-Security-Policy' i], meta[http-equiv='Content-Security-Policy-Report-Only' i]");
+        if (cspMeta) {
+            const content = cspMeta.getAttribute("content") || "";
+            if (content) {
+                return parseCspString(content, "Meta Tag");
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Universal CSP Mitigation Evaluator.
+ * Adjusts findings to LOW / MITIGATED when protected by an active Content Security Policy.
+ * @param {Object} scan
+ * @param {Object} cspInfo
+ * @returns {Object}
+ */
+function applyCspMitigations(scan, cspInfo) {
+    if (!scan || !cspInfo || !cspInfo.isActive) return scan;
+
+    const mitigateFinding = (f) => {
+        if (!f || !f.type) return f;
+        const type = String(f.type).toUpperCase();
+
+        // 1. Script execution vulnerabilities (XSS, DOM Sinks, Inline Scripts)
+        const isScriptVuln = 
+            type.includes("XSS") || 
+            type.includes("DOM_SINK") || 
+            type.includes("INLINE_SCRIPT") ||
+            type === "DOM_XSS_ENDPOINT" ||
+            type === "REFLECTED_XSS_ENDPOINT" ||
+            type === "STORED_XSS_ENDPOINT" ||
+            type === "DANGEROUS_DOM_SINK";
+
+        if (isScriptVuln && cspInfo.isStrictScript) {
+            f.severity = "LOW";
+            f.isMitigated = true;
+            if (typeof f.reason === "string" && !f.reason.includes("[MITIGATED BY CSP]")) {
+                f.reason = `${f.reason} [MITIGATED BY CSP: ${cspInfo.summary}]`;
+            }
+            if (f.details) {
+                if (typeof f.details.title === "string" && !f.details.title.includes("[MITIGATED BY CSP]")) {
+                    f.details.title = `[MITIGATED BY CSP] ${f.details.title}`;
+                }
+                f.details.cspMitigation = {
+                    status: "MITIGATED",
+                    protectionType: "Content Security Policy Enforced",
+                    policySummary: cspInfo.summary,
+                    details: "This finding's active exploitability is neutralized because the page enforces a strict Content Security Policy (script-src without 'unsafe-inline') which prevents arbitrary script execution in the browser."
+                };
+            }
+        }
+
+        // 2. Dangerous APIs (eval, Function, setTimeout string)
+        if (type === "DANGEROUS_API" && cspInfo.blocksEval) {
+            f.severity = "LOW";
+            f.isMitigated = true;
+            if (typeof f.reason === "string" && !f.reason.includes("[MITIGATED BY CSP]")) {
+                f.reason = `${f.reason} [MITIGATED BY CSP: 'unsafe-eval' blocked]`;
+            }
+            if (f.details) {
+                if (typeof f.details.title === "string" && !f.details.title.includes("[MITIGATED BY CSP]")) {
+                    f.details.title = `[MITIGATED BY CSP] ${f.details.title}`;
+                }
+                f.details.cspMitigation = {
+                    status: "MITIGATED",
+                    protectionType: "CSP 'unsafe-eval' Blocked",
+                    policySummary: cspInfo.summary,
+                    details: "Execution of dynamic string code via eval() or Function() is actively blocked by the browser's Content Security Policy."
+                };
+            }
+        }
+
+        // 3. CSP Bypass Endpoint (e.g. DVWA /vulnerabilities/csp/)
+        if (type === "CSP_BYPASS_VULNERABILITY") {
+            if (!cspInfo.isBypassable && cspInfo.isStrictScript) {
+                f.severity = "LOW";
+                f.isMitigated = true;
+                f.reason = `Content Security Policy active & verified: ${cspInfo.summary} (No bypass patterns observed)`;
+                if (f.details) {
+                    f.details.title = "[SECURE] Content Security Policy Enforced";
+                    f.details.riskExplanation = "The current endpoint enforces a strict Content Security Policy without known bypass directives ('unsafe-inline' and wildcard origins are disabled).";
+                    f.details.cspMitigation = {
+                        status: "SECURE",
+                        policySummary: cspInfo.summary,
+                        details: "The Content Security Policy on this page was analyzed and verified to enforce strict script origin boundaries."
+                    };
+                }
+            } else if (cspInfo.isBypassable) {
+                f.reason = `Content Security Policy bypass weakness detected: ${cspInfo.bypassReason}`;
+            }
+        }
+
+        return f;
+    };
+
+    if (Array.isArray(scan.webVulnerabilityFindings)) {
+        // Eliminate false-positive CSP_BYPASS when CSP is strict & not bypassable
+        if (!cspInfo.isBypassable && (cspInfo.isStrictScript || cspInfo.isActive)) {
+            scan.webVulnerabilityFindings = scan.webVulnerabilityFindings.filter(f => f.type !== "CSP_BYPASS_VULNERABILITY");
+        }
+        scan.webVulnerabilityFindings.forEach(mitigateFinding);
+    }
+    if (Array.isArray(scan.domFindings)) {
+        scan.domFindings.forEach(mitigateFinding);
+    }
+    if (Array.isArray(scan.scriptIframeFindings)) {
+        scan.scriptIframeFindings.forEach(mitigateFinding);
+    }
+
+    return scan;
+}
+
 function analyzeSecurityAudit() {
     const audit = {
         technologies: [],
@@ -140,9 +341,14 @@ function analyzeSecurityAudit() {
     // ==========================================
     // 5. SECURITY HEADERS & COOKIE HYGIENE
     // ==========================================
-    // Check for CSP meta tag
-    const cspMeta = document.querySelector("meta[http-equiv='Content-Security-Policy' i]");
-    audit.headerCookieAudit.missingCsp = !cspMeta;
+    // Check for active CSP (HTTP header or meta tag)
+    const detectedCsp = typeof detectAndParseActiveCsp === "function" ? detectAndParseActiveCsp() : null;
+    if (detectedCsp && detectedCsp.isActive) {
+        audit.headerCookieAudit.csp = detectedCsp;
+        audit.headerCookieAudit.missingCsp = false;
+    } else {
+        audit.headerCookieAudit.missingCsp = true;
+    }
 
     // Mixed Content checks (HTTP assets on HTTPS origin)
     if (audit.headerCookieAudit.isHttps) {
@@ -520,3 +726,9 @@ function getVulnerabilityCvssAndGuide(vulnType) {
         }
     };
 }
+
+
+const _globalAuditorScope = typeof window !== "undefined" ? window : (typeof self !== "undefined" ? self : globalThis);
+_globalAuditorScope.parseCspString = parseCspString;
+_globalAuditorScope.detectAndParseActiveCsp = detectAndParseActiveCsp;
+_globalAuditorScope.applyCspMitigations = applyCspMitigations;

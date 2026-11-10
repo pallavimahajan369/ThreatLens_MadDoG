@@ -70,10 +70,11 @@ function analyzeFormSecurity() {
             }
         });
 
+        const isHttp = currentPageUrl.startsWith("http://");
         findings.push({
             category: "FORM",
             type: "PASSWORD_FIELD",
-            severity: "MEDIUM",
+            severity: isHttp ? "HIGH" : "LOW",
             reason: `${passwordFields.length} password field(s) detected`,
             details: {
                 title: "Password Input Fields Detected",

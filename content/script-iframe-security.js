@@ -50,7 +50,7 @@ function getScriptFileName(urlStr) {
     }
 }
 
-function analyzeScriptIframeSecurity() {
+function analyzeScriptIframeSecurity(providedCsp = null) {
     const findings = [];
     const currentPageUrl = window.location.href;
     const docFile = getScriptDocumentFileName();
@@ -262,10 +262,12 @@ function analyzeScriptIframeSecurity() {
     });
 
     if (dangerousAPICount > 0) {
+        const isCspBlocking = providedCsp && providedCsp.isActive && providedCsp.blocksEval;
         findings.push({
             category: "SCRIPT",
             type: "DANGEROUS_API",
-            severity: "MEDIUM",
+            severity: "LOW",
+            isMitigated: isCspBlocking,
             reason: `${dangerousAPICount} potentially dangerous JavaScript API reference(s) detected`,
             details: {
                 title: "Dangerous JavaScript APIs Detected",
@@ -361,7 +363,7 @@ function analyzeScriptIframeSecurity() {
         findings.push({
             category: "IFRAME",
             type: "CROSS_ORIGIN_IFRAME",
-            severity: "MEDIUM",
+            severity: "LOW",
             reason: `${crossOriginIframeCount} cross-origin iframe(s) detected`,
             details: {
                 title: "Cross-Origin Iframes Detected",

@@ -908,6 +908,129 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
+
+// =========================================================
+// HACKERONE / BUGCROWD BUG BOUNTY REPORT GENERATOR
+// =========================================================
+
+let currentActiveModalFinding = null;
+let currentActiveModalPageUrl = "";
+
+function generateHackerOneReport(finding, pageUrl) {
+    if (!finding) return "";
+    const kb = typeof getKnowledgeBaseEntry === "function" ? getKnowledgeBaseEntry(finding.type) : {};
+    const cvss = typeof getVulnerabilityCvssAndGuide === "function" ? getVulnerabilityCvssAndGuide(finding.type) : null;
+    const title = finding.details?.title || kb.title || finding.reason || finding.type;
+    const severity = (finding.severity || "MEDIUM").toUpperCase();
+    const cveId = finding.cveId || finding.details?.cveId || (cvss ? cvss.cveId : "CWE-General");
+    const cvssScore = finding.details?.cvssScore || (cvss ? cvss.cvssScore : "6.5");
+    const cvssVector = finding.details?.cvssVector || (cvss ? cvss.cvssVector : "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N");
+    const location = finding.details?.items?.[0]?.location || finding.details?.location || pageUrl || "Target Endpoint";
+    const preview = finding.details?.items?.[0]?.preview || finding.details?.preview || pageUrl;
+    const riskExplanation = finding.details?.riskExplanation || kb.risk || finding.reason || "Unauthorized data access or security boundary violation.";
+    const solution = finding.details?.solution || kb.solution || "Apply strict server-side input validation, output encoding, and principle of least privilege.";
+    const isMitigated = finding.isMitigated || !!finding.details?.cspMitigation;
+    const cspDetails = finding.details?.cspMitigation?.details || "None";
+
+    let urlObj = null;
+    let hostname = "target-application.com";
+    try {
+        urlObj = new URL(pageUrl);
+        hostname = urlObj.hostname || "target-application.com";
+    } catch (e) {}
+
+    let report = "# [Vulnerability Report] [" + cveId + "] " + title + " on " + hostname + "\n\n";
+
+    report += "## Summary\n";
+    report += "A **" + severity + "** severity security vulnerability was identified on the target host **" + hostname + "** at endpoint `" + location + "`.\n";
+    report += "The application processes dynamic user inputs or parameters without adequate server-side sanitization, matching vulnerability pattern **" + cveId + "** (" + title + ").\n\n";
+
+    report += "## Asset & Vulnerability Details\n";
+    report += "- **Target URL:** `" + pageUrl + "`\n";
+    report += "- **Vulnerable Endpoint / Location:** `" + location + "`\n";
+    report += "- **Weakness Classification:** " + cveId + " (" + title + ")\n";
+    report += "- **Severity Rating:** **" + severity + "**\n";
+    report += "- **CVSS v3.1 Base Score:** **" + cvssScore + "**\n";
+    report += "- **CVSS v3.1 Vector String:** `" + cvssVector + "`\n\n";
+
+    report += "## Proof of Concept (Step-by-Step Reproduction)\n";
+    report += "1. Open a modern web browser and navigate to the target endpoint:\n";
+    report += "   ```\n   " + pageUrl + "\n   ```\n";
+    report += "2. Inspect the affected parameter or interactive component at location:\n";
+    report += "   `" + location + "`\n";
+    report += "3. Review the reflected payload or source evidence:\n";
+    report += "   ```html\n   " + preview + "\n   ```\n";
+    report += "4. Observe the response: The application accepts or reflects the input vector without context-aware encoding or parameterization.\n\n";
+
+    report += "## Security & Business Impact\n";
+    report += riskExplanation + "\n\n";
+
+    report += "## Defense-in-Depth & Mitigation Posture\n";
+    if (isMitigated) {
+        report += "- **Mitigation Status:** [MITIGATED / DEFENSE-IN-DEPTH ENFORCED]\n";
+        report += "- **Active Defense:** " + cspDetails + "\n";
+        report += "*Note for Triager: While the endpoint exhibits the vulnerability pattern, active client-side exploitability is restricted in modern browsers by the enforced Content Security Policy.*\n\n";
+    } else {
+        report += "- **Mitigation Status:** Unmitigated (Active vulnerability)\n";
+        report += "- **Content Security Policy:** Not currently blocking this attack vector.\n\n";
+    }
+
+    report += "## Suggested Remediation\n";
+    report += "```\n" + solution + "\n```\n\n";
+
+    report += "---\n*Automated Proof of Concept generated via ThreatLens Ocular Security Assistant.*\n";
+
+    return report;
+}
+
+function generateAndDownloadBugBountyReport() {
+    const scan = lastRenderedScan || {};
+    const url = lastRenderedPageUrl || scan.url || window.location.href;
+    let hostname = "target-website";
+    try {
+        hostname = new URL(url).hostname || "target-website";
+    } catch (e) {}
+
+    const findings = [
+        ...(scan.webVulnerabilityFindings || []),
+        ...(scan.urlFindings || []),
+        ...(scan.domFindings || []),
+        ...(scan.formFindings || []),
+        ...(scan.scriptIframeFindings || []),
+        ...(scan.sensitiveDataFindings || []),
+        ...(scan.promptInjectionFindings || [])
+    ].filter(f => f && (f.severity === "CRITICAL" || f.severity === "HIGH" || f.severity === "MEDIUM" || f.cveId));
+
+    if (findings.length === 0) {
+        alert("No High or Medium security vulnerabilities detected to export for bug bounty submission.");
+        return;
+    }
+
+    let fullReport = `# 🎯 ThreatLens Bug Bounty Submission Package\n`;
+    fullReport += `**Target Host:** ${hostname}\n`;
+    fullReport += `**Target URL:** ${url}\n`;
+    fullReport += `**Export Date:** ${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC\n`;
+    fullReport += `**Ready-to-Submit Vulnerabilities:** ${findings.length}\n\n`;
+    fullReport += `---\n\n`;
+
+    findings.forEach((f, idx) => {
+        fullReport += `---\n\n### Bug Bounty Submission #${idx + 1}\n\n`;
+        fullReport += generateHackerOneReport(f, url);
+        fullReport += `\n\n`;
+    });
+
+    const blob = new Blob([fullReport], { type: "text/markdown;charset=utf-8" });
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = `ThreatLens_BugBounty_Package_${hostname}_${Date.now()}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+}
+
+
 function openFindingModal(finding, pageUrl) {
     if (!modalOverlay || !finding) return;
 
@@ -930,6 +1053,27 @@ function openFindingModal(finding, pageUrl) {
     const modalTitle = document.getElementById("modalTitle");
     if (modalTitle) {
         modalTitle.textContent = finding.details?.title || kb.title || finding.reason;
+    }
+
+    // Active CSP Mitigation Banner
+    const existingCspAlert = document.getElementById("modalCspMitigationAlert");
+    if (existingCspAlert) existingCspAlert.remove();
+
+    if (finding.isMitigated || finding.details?.cspMitigation) {
+        const mitBox = document.createElement("div");
+        mitBox.id = "modalCspMitigationAlert";
+        mitBox.className = "csp-mitigation-box";
+        const mitDetails = finding.details?.cspMitigation?.details || "This finding's active execution is blocked because the page enforces a strict Content Security Policy.";
+        const mitPolicy = finding.details?.cspMitigation?.policySummary || "Strict script-src enforced without 'unsafe-inline'";
+        mitBox.innerHTML = `
+            <div class="csp-mit-title">🛡️ Active Defense-in-Depth: Content Security Policy Enforced</div>
+            <div class="csp-mit-desc">${escapeHtml(mitDetails)}</div>
+            <div class="csp-mit-chip">Policy: <strong>${escapeHtml(mitPolicy)}</strong></div>
+        `;
+        const modalBody = document.querySelector(".modal-body");
+        if (modalBody) {
+            modalBody.prepend(mitBox);
+        }
     }
 
     // Meta strip
@@ -1314,11 +1458,30 @@ function renderAuditorSuite(safeScan) {
         protoRow.innerHTML = `<span>Transport Encryption</span><span class="${isHttps ? 'hygiene-badge-good' : 'hygiene-badge-bad'}">${isHttps ? 'HTTPS SECURE' : 'HTTP PLAINTEXT'}</span>`;
         headerCookieContainer.appendChild(protoRow);
 
-        // CSP
-        const missingCsp = headerCookie.missingCsp !== false;
+        // Content Security Policy (HTTP Header / Meta)
+        const csp = headerCookie.csp;
+        const missingCsp = headerCookie.missingCsp !== false && (!csp || !csp.isActive);
         const cspRow = document.createElement("div");
         cspRow.className = "hygiene-item";
-        cspRow.innerHTML = `<span>Content Security Policy (Meta)</span><span class="${missingCsp ? 'hygiene-badge-warn' : 'hygiene-badge-good'}">${missingCsp ? 'MISSING CSP META' : 'CSP CONFIGURED'}</span>`;
+
+        let cspLabel = "MISSING CSP";
+        let cspClass = "hygiene-badge-warn";
+        if (csp && csp.isActive) {
+            if (csp.isStrictScript) {
+                cspLabel = `ACTIVE (${csp.source || "Header"}: ${csp.summary})`;
+                cspClass = "hygiene-badge-good";
+            } else if (csp.hasUnsafeInline) {
+                cspLabel = `PERMISSIVE (${csp.source || "Header"}: 'unsafe-inline' active)`;
+                cspClass = "hygiene-badge-warn";
+            } else {
+                cspLabel = `ACTIVE (${csp.source || "Header"})`;
+                cspClass = "hygiene-badge-good";
+            }
+        } else if (!missingCsp) {
+            cspLabel = "CSP CONFIGURED";
+            cspClass = "hygiene-badge-good";
+        }
+        cspRow.innerHTML = `<span>Content Security Policy</span><span class="${cspClass}">${escapeHtml(cspLabel)}</span>`;
         headerCookieContainer.appendChild(cspRow);
 
         // Cookies
@@ -1995,8 +2158,31 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl, siemE
                 reason.textContent = finding.reason || "No reason provided";
 
                 leftCol.appendChild(badge);
+                if (finding.isMitigated || finding.details?.cspMitigation) {
+                    const cspBadge = document.createElement("span");
+                    cspBadge.className = "finding-csp-mitigated-badge";
+                    cspBadge.textContent = "🛡️ CSP PROTECTED";
+                    cspBadge.title = "This potential vulnerability is actively neutralized by the site's Content Security Policy.";
+                    leftCol.appendChild(cspBadge);
+                }
                 leftCol.appendChild(categoryTag);
                 leftCol.appendChild(reason);
+
+                const h1Btn = document.createElement("button");
+                h1Btn.className = "finding-h1-btn";
+                h1Btn.type = "button";
+                h1Btn.innerHTML = "<span>📋 Copy PoC</span>";
+                h1Btn.title = "Copy HackerOne / Bugcrowd Report to Clipboard";
+                h1Btn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const reportText = generateHackerOneReport(finding, pageUrl);
+                    navigator.clipboard.writeText(reportText).then(() => {
+                        const orig = h1Btn.innerHTML;
+                        h1Btn.innerHTML = "<span>✅ Copied!</span>";
+                        setTimeout(() => { h1Btn.innerHTML = orig; }, 2000);
+                    });
+                });
+                card.appendChild(h1Btn);
 
                 const detailBtn = document.createElement("button");
                 detailBtn.className = "finding-detail-btn";
@@ -2207,5 +2393,26 @@ const exportReportBtn = document.getElementById("exportReportBtn");
 if (exportReportBtn) {
     exportReportBtn.addEventListener("click", () => {
         generateAndDownloadAuditReport();
+    });
+}
+
+const exportBugBountyBtn = document.getElementById("exportBugBountyBtn");
+if (exportBugBountyBtn) {
+    exportBugBountyBtn.addEventListener("click", () => {
+        generateAndDownloadBugBountyReport();
+    });
+}
+
+const modalCopyH1ReportBtn = document.getElementById("modalCopyH1ReportBtn");
+if (modalCopyH1ReportBtn) {
+    modalCopyH1ReportBtn.addEventListener("click", () => {
+        if (currentActiveModalFinding) {
+            const reportText = generateHackerOneReport(currentActiveModalFinding, currentActiveModalPageUrl);
+            navigator.clipboard.writeText(reportText).then(() => {
+                const orig = modalCopyH1ReportBtn.innerHTML;
+                modalCopyH1ReportBtn.innerHTML = "<span>✅ Copied Bug Bounty PoC!</span>";
+                setTimeout(() => { modalCopyH1ReportBtn.innerHTML = orig; }, 2500);
+            });
+        }
     });
 }

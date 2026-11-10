@@ -1,7 +1,56 @@
 importScripts("../content/ai-sanitizer.js");
+importScripts("../content/risk-engine.js");
+importScripts("../content/security-auditor.js");
 importScripts("../content/siem-engine.js");
 
 console.log("ThreatLens service worker started");
+
+// =========================================================
+// REAL-TIME HTTP RESPONSE SECURITY HEADERS CAPTURE
+// =========================================================
+const tabSecurityHeaders = new Map();
+
+if (chrome.webRequest && chrome.webRequest.onHeadersReceived) {
+    chrome.webRequest.onHeadersReceived.addListener(
+        (details) => {
+            if (details.type === "main_frame" && details.tabId >= 0) {
+                const rawHeaders = details.responseHeaders || [];
+                const headersMap = {};
+                for (const h of rawHeaders) {
+                    const name = (h.name || "").toLowerCase();
+                    headersMap[name] = h.value || "";
+                }
+
+                const cspValue = headersMap["content-security-policy"] || headersMap["content-security-policy-report-only"] || null;
+                const headerData = {
+                    csp: cspValue,
+                    hsts: headersMap["strict-transport-security"] || null,
+                    xFrameOptions: headersMap["x-frame-options"] || null,
+                    xContentTypeOptions: headersMap["x-content-type-options"] || null,
+                    server: headersMap["server"] || null,
+                    xPoweredBy: headersMap["x-powered-by"] || null,
+                    timestamp: Date.now()
+                };
+
+                tabSecurityHeaders.set(details.tabId, headerData);
+                chrome.storage.local.set({
+                    [`headers_${details.tabId}`]: headerData
+                }).catch(() => {});
+            }
+        },
+        { urls: ["<all_urls>"] },
+        ["responseHeaders"]
+    );
+}
+
+// Clean up tab headers on tab close
+if (chrome.tabs && chrome.tabs.onRemoved) {
+    chrome.tabs.onRemoved.addListener((tabId) => {
+        tabSecurityHeaders.delete(tabId);
+        chrome.storage.local.remove([`headers_${tabId}`]).catch(() => {});
+    });
+}
+
 
 // Track tabs that currently have an AI request in progress
 const aiRequestsInProgress = new Set();
@@ -404,6 +453,25 @@ function isValidScanMessage(message) {
 
 chrome.runtime.onMessage.addListener(
     (message, sender, sendResponse) => {
+        // ==================================
+        // QUERY TAB SECURITY HEADERS (E.G. CSP)
+        // ==================================
+        if (message.type === "GET_SECURITY_HEADERS") {
+            const tabId = message.tabId !== undefined ? message.tabId : sender.tab?.id;
+            let headers = tabId !== undefined ? tabSecurityHeaders.get(tabId) : null;
+            if (headers) {
+                sendResponse({ success: true, headers });
+            } else if (tabId !== undefined) {
+                chrome.storage.local.get([`headers_${tabId}`], (res) => {
+                    sendResponse({ success: true, headers: res[`headers_${tabId}`] || null });
+                });
+                return true;
+            } else {
+                sendResponse({ success: false, headers: null });
+            }
+            return true;
+        }
+
 
         if (!message || typeof message !== "object") {
             return false;
@@ -590,7 +658,7 @@ chrome.runtime.onMessage.addListener(
 
 
             chrome.storage.local.get(
-                "extensionScan",
+                ["extensionScan", `headers_${tabId}`],
                 (result) => {
 
                     if (chrome.runtime.lastError) {
@@ -652,6 +720,49 @@ chrome.runtime.onMessage.addListener(
 
                     message.data.extensionRiskReasons =
                         extensionRiskReasons;
+
+                    // ==================================
+                    // APPLY REAL HTTP SECURITY HEADERS & CSP MITIGATION
+                    // ==================================
+                    const liveHeaders = tabSecurityHeaders.get(tabId) || result[`headers_${tabId}`] || null;
+                    if (liveHeaders) {
+                        if (!message.data.securityAudit) message.data.securityAudit = {};
+                        if (!message.data.securityAudit.headerCookieAudit) message.data.securityAudit.headerCookieAudit = {};
+
+                        if (liveHeaders.csp && typeof parseCspString === "function") {
+                            const parsedHttpCsp = parseCspString(liveHeaders.csp, "HTTP Header");
+                            message.data.securityAudit.headerCookieAudit.csp = parsedHttpCsp;
+                            message.data.securityAudit.headerCookieAudit.missingCsp = !parsedHttpCsp.isActive;
+                            if (typeof applyCspMitigations === "function") {
+                                applyCspMitigations(message.data, parsedHttpCsp);
+                            }
+                        }
+                        if (liveHeaders.hsts) {
+                            message.data.securityAudit.headerCookieAudit.hsts = liveHeaders.hsts;
+                        }
+                        if (liveHeaders.xFrameOptions) {
+                            message.data.securityAudit.headerCookieAudit.xFrameOptions = liveHeaders.xFrameOptions;
+                        }
+                    } else if (message.data.securityAudit?.headerCookieAudit?.csp && typeof applyCspMitigations === "function") {
+                        applyCspMitigations(message.data, message.data.securityAudit.headerCookieAudit.csp);
+                    }
+
+                    // Recalculate combined risk after CSP mitigations
+                    if (typeof calculateOverallRisk === "function") {
+                        const allMitigatedFindings = [
+                            ...(message.data.webVulnerabilityFindings || []),
+                            ...(message.data.urlFindings || []),
+                            ...(message.data.domFindings || []),
+                            ...(message.data.formFindings || []),
+                            ...(message.data.scriptIframeFindings || []),
+                            ...(message.data.sensitiveDataFindings || []),
+                            ...(message.data.promptInjectionFindings || [])
+                        ];
+                        const recalculatedRisk = calculateOverallRisk(allMitigatedFindings);
+                        message.data.risk = recalculatedRisk;
+                        message.data.overallRisk = calculateCombinedRisk(sanitizeRiskLevel(recalculatedRisk.level), extensionScan);
+                    }
+
                     // ==================================
                     // STORE WEBSITE SCAN RESULT
                     // ==================================
