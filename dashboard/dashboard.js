@@ -910,11 +910,97 @@ document.addEventListener("keydown", (e) => {
 
 
 // =========================================================
+
+// =========================================================
+// UNIVERSAL ROBUST FILE DOWNLOAD & CLIPBOARD UTILITIES
+// =========================================================
+
+function fallbackAnchorDownload(blobUrl, filename) {
+    try {
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = filename;
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => {
+            try { URL.revokeObjectURL(blobUrl); } catch (e) {}
+        }, 30000);
+    } catch (e) {
+        console.error("Fallback anchor download error:", e);
+    }
+}
+
+function triggerFileDownload(content, filename, mimeType = "text/markdown;charset=utf-8") {
+    try {
+        const blob = new Blob([content], { type: mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+
+        if (typeof chrome !== "undefined" && chrome.downloads && typeof chrome.downloads.download === "function") {
+            chrome.downloads.download({
+                url: blobUrl,
+                filename: filename,
+                saveAs: false
+            }, (downloadId) => {
+                if (chrome.runtime.lastError || !downloadId) {
+                    fallbackAnchorDownload(blobUrl, filename);
+                } else {
+                    setTimeout(() => {
+                        try { URL.revokeObjectURL(blobUrl); } catch (e) {}
+                    }, 30000);
+                }
+            });
+            return;
+        }
+
+        fallbackAnchorDownload(blobUrl, filename);
+    } catch (err) {
+        console.error("ThreatLens triggerFileDownload error:", err);
+    }
+}
+
+function fallbackExecCommandCopy(text) {
+    return new Promise((resolve, reject) => {
+        try {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.top = "-9999px";
+            textarea.style.left = "-9999px";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            const successful = document.execCommand("copy");
+            document.body.removeChild(textarea);
+            if (successful) {
+                resolve();
+            } else {
+                reject(new Error("execCommand copy returned false"));
+            }
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+function copyTextToClipboard(text) {
+    if (!text) return Promise.reject(new Error("No text to copy"));
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        return navigator.clipboard.writeText(text).catch(() => {
+            return fallbackExecCommandCopy(text);
+        });
+    }
+    return fallbackExecCommandCopy(text);
+}
+
 // HACKERONE / BUGCROWD BUG BOUNTY REPORT GENERATOR
 // =========================================================
 
 let currentActiveModalFinding = null;
 let currentActiveModalPageUrl = "";
+let lastRenderedFindingsList = [];
 
 function generateHackerOneReport(finding, pageUrl) {
     if (!finding) return "";
@@ -922,7 +1008,7 @@ function generateHackerOneReport(finding, pageUrl) {
     const cvss = typeof getVulnerabilityCvssAndGuide === "function" ? getVulnerabilityCvssAndGuide(finding.type) : null;
     const title = finding.details?.title || kb.title || finding.reason || finding.type;
     const severity = (finding.severity || "MEDIUM").toUpperCase();
-    const cveId = finding.cveId || finding.details?.cveId || (cvss ? cvss.cveId : "CWE-General");
+    const cveId = finding.cveId || finding.details?.cveId || cvss?.cveId || (finding.type?.includes("SQL") ? "CWE-89" : "CWE-General");
     const cvssScore = finding.details?.cvssScore || (cvss ? cvss.cvssScore : "6.5");
     const cvssVector = finding.details?.cvssVector || (cvss ? cvss.cvssVector : "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N");
     const location = finding.details?.items?.[0]?.location || finding.details?.location || pageUrl || "Target Endpoint";
@@ -991,48 +1077,61 @@ function generateAndDownloadBugBountyReport() {
         hostname = new URL(url).hostname || "target-website";
     } catch (e) {}
 
-    const findings = [
-        ...(scan.webVulnerabilityFindings || []),
-        ...(scan.urlFindings || []),
-        ...(scan.domFindings || []),
-        ...(scan.formFindings || []),
-        ...(scan.scriptIframeFindings || []),
-        ...(scan.sensitiveDataFindings || []),
-        ...(scan.promptInjectionFindings || [])
-    ].filter(f => f && (f.severity === "CRITICAL" || f.severity === "HIGH" || f.severity === "MEDIUM" || f.cveId));
+    let findings = [];
+    if (Array.isArray(lastRenderedFindingsList) && lastRenderedFindingsList.length > 0) {
+        findings = [...lastRenderedFindingsList];
+    } else {
+        findings = [
+            ...(scan.webVulnerabilityFindings || []),
+            ...(scan.urlFindings || []),
+            ...(scan.domFindings || []),
+            ...(scan.formFindings || []),
+            ...(scan.scriptIframeFindings || []),
+            ...(scan.sensitiveDataFindings || []),
+            ...(scan.promptInjectionFindings || [])
+        ];
+    }
+
+    const exportBtn = document.getElementById("exportBugBountyBtn");
 
     if (findings.length === 0) {
-        alert("No High or Medium security vulnerabilities detected to export for bug bounty submission.");
+        if (exportBtn) {
+            const orig = exportBtn.innerHTML;
+            exportBtn.innerHTML = "<span>⚠️ No Findings to Export</span>";
+            setTimeout(() => { exportBtn.innerHTML = orig; }, 2500);
+        }
         return;
     }
 
-    let fullReport = `# 🎯 ThreatLens Bug Bounty Submission Package\n`;
-    fullReport += `**Target Host:** ${hostname}\n`;
-    fullReport += `**Target URL:** ${url}\n`;
-    fullReport += `**Export Date:** ${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC\n`;
-    fullReport += `**Ready-to-Submit Vulnerabilities:** ${findings.length}\n\n`;
-    fullReport += `---\n\n`;
+    let fullReport = "# 🎯 ThreatLens Bug Bounty Submission Package\n";
+    fullReport += "**Target Host:** " + hostname + "\n";
+    fullReport += "**Target URL:** " + url + "\n";
+    fullReport += "**Export Date:** " + new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC\n";
+    fullReport += "**Ready-to-Submit Vulnerabilities:** " + findings.length + "\n\n";
+    fullReport += "---\n\n";
 
     findings.forEach((f, idx) => {
-        fullReport += `---\n\n### Bug Bounty Submission #${idx + 1}\n\n`;
+        fullReport += "---\n\n### Bug Bounty Submission #" + (idx + 1) + "\n\n";
         fullReport += generateHackerOneReport(f, url);
-        fullReport += `\n\n`;
+        fullReport += "\n\n";
     });
 
-    const blob = new Blob([fullReport], { type: "text/markdown;charset=utf-8" });
-    const blobUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = blobUrl;
-    link.download = `ThreatLens_BugBounty_Package_${hostname}_${Date.now()}.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    const safeHost = hostname.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const fileName = "ThreatLens_BugBounty_Package_" + safeHost + "_" + Date.now() + ".md";
+    triggerFileDownload(fullReport, fileName, "text/markdown;charset=utf-8");
+
+    if (exportBtn) {
+        const orig = exportBtn.innerHTML;
+        exportBtn.innerHTML = "<span>✅ Package Downloaded!</span>";
+        setTimeout(() => { exportBtn.innerHTML = orig; }, 2500);
+    }
 }
 
 
 function openFindingModal(finding, pageUrl) {
     if (!modalOverlay || !finding) return;
+    currentActiveModalFinding = finding;
+    currentActiveModalPageUrl = pageUrl || lastRenderedPageUrl || "";
 
     const severity = (finding.severity || "LOW").toUpperCase();
     const type = finding.type || "UNKNOWN";
@@ -1619,15 +1718,16 @@ function generateAndDownloadAuditReport() {
     md += `---\n*Report generated by ThreatLens Ocular Security Assistant.*\n`;
 
     // Download trigger
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-    const blobUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = blobUrl;
-    link.download = `ThreatLens_Audit_Report_${hostname}_${Date.now()}.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    const safeHost = hostname.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const fileName = "ThreatLens_Audit_Report_" + safeHost + "_" + Date.now() + ".md";
+    triggerFileDownload(md, fileName, "text/markdown;charset=utf-8");
+
+    const exportReportBtnEl = document.getElementById("exportReportBtn");
+    if (exportReportBtnEl) {
+        const orig = exportReportBtnEl.innerHTML;
+        exportReportBtnEl.innerHTML = "<span>✅ Pentest Report Downloaded!</span>";
+        setTimeout(() => { exportReportBtnEl.innerHTML = orig; }, 2500);
+    }
 }
 
 // =========================================================
@@ -2176,10 +2276,17 @@ function renderDashboardWithScan(scan, extensionScan, aiAnalysis, pageUrl, siemE
                 h1Btn.addEventListener("click", (e) => {
                     e.stopPropagation();
                     const reportText = generateHackerOneReport(finding, pageUrl);
-                    navigator.clipboard.writeText(reportText).then(() => {
+                    copyTextToClipboard(reportText).then(() => {
                         const orig = h1Btn.innerHTML;
-                        h1Btn.innerHTML = "<span>✅ Copied!</span>";
-                        setTimeout(() => { h1Btn.innerHTML = orig; }, 2000);
+                        h1Btn.innerHTML = "<span>✅ Copied PoC!</span>";
+                        setTimeout(() => { h1Btn.innerHTML = orig; }, 2500);
+                    }).catch(() => {
+                        const cveId = finding.cveId || "Vulnerability";
+                        const safeCve = cveId.replace(/[^a-zA-Z0-9_-]/g, "_");
+                        triggerFileDownload(reportText, "ThreatLens_PoC_" + safeCve + "_" + Date.now() + ".md");
+                        const orig = h1Btn.innerHTML;
+                        h1Btn.innerHTML = "<span>✅ Downloaded PoC!</span>";
+                        setTimeout(() => { h1Btn.innerHTML = orig; }, 2500);
                     });
                 });
                 card.appendChild(h1Btn);
@@ -2306,6 +2413,17 @@ function loadDashboardData() {
                 scan = result.lastScan;
             }
 
+            if (scan && Array.isArray(scan.webVulnerabilityFindings)) {
+                scan.webVulnerabilityFindings = scan.webVulnerabilityFindings.filter(f => f && f.type !== "POTENTIAL_SQL_INJECTION_FORM");
+                if (scan.webVulnerabilityFindings.length === 0) {
+                    scan.webVulnerabilityFindings = [{
+                        category: "WEB_VULNERABILITY",
+                        type: "NO_WEB_VULNERABILITY",
+                        severity: "SAFE",
+                        reason: "No active SQL Injection or web application vulnerabilities detected"
+                    }];
+                }
+            }
             const extensionScan = result.extensionScan || [];
             const aiAnalysis =
                 (tabId ? result[`ai_analysis_${tabId}`] : null) || result.latest_ai_analysis || null;
@@ -2403,16 +2521,75 @@ if (exportBugBountyBtn) {
     });
 }
 
+const modalDownloadH1ReportBtn = document.getElementById("modalDownloadH1ReportBtn");
+if (modalDownloadH1ReportBtn) {
+    modalDownloadH1ReportBtn.addEventListener("click", () => {
+        if (!currentActiveModalFinding) return;
+        const cveId = currentActiveModalFinding.cveId || currentActiveModalFinding.details?.cveId || "Vulnerability";
+        const safeCve = cveId.replace(/[^a-zA-Z0-9_-]/g, "_");
+        let hostClean = "target";
+        try {
+            hostClean = new URL(currentActiveModalPageUrl || window.location.href).hostname.replace(/[^a-zA-Z0-9.-]/g, "_");
+        } catch (e) {}
+
+        const reportText = generateHackerOneReport(currentActiveModalFinding, currentActiveModalPageUrl);
+        const fileName = "ThreatLens_PoC_" + safeCve + "_" + hostClean + "_" + Date.now() + ".md";
+        triggerFileDownload(reportText, fileName, "text/markdown;charset=utf-8");
+
+        const orig = modalDownloadH1ReportBtn.innerHTML;
+        modalDownloadH1ReportBtn.innerHTML = "<span>✅ Downloaded PoC Report!</span>";
+        setTimeout(() => { modalDownloadH1ReportBtn.innerHTML = orig; }, 2500);
+    });
+}
+
 const modalCopyH1ReportBtn = document.getElementById("modalCopyH1ReportBtn");
 if (modalCopyH1ReportBtn) {
     modalCopyH1ReportBtn.addEventListener("click", () => {
-        if (currentActiveModalFinding) {
-            const reportText = generateHackerOneReport(currentActiveModalFinding, currentActiveModalPageUrl);
-            navigator.clipboard.writeText(reportText).then(() => {
-                const orig = modalCopyH1ReportBtn.innerHTML;
-                modalCopyH1ReportBtn.innerHTML = "<span>✅ Copied Bug Bounty PoC!</span>";
-                setTimeout(() => { modalCopyH1ReportBtn.innerHTML = orig; }, 2500);
-            });
+        if (!currentActiveModalFinding) return;
+        const reportText = generateHackerOneReport(currentActiveModalFinding, currentActiveModalPageUrl);
+        copyTextToClipboard(reportText).then(() => {
+            const orig = modalCopyH1ReportBtn.innerHTML;
+            modalCopyH1ReportBtn.innerHTML = "<span>✅ Copied PoC!</span>";
+            setTimeout(() => { modalCopyH1ReportBtn.innerHTML = orig; }, 2500);
+        }).catch(() => {
+            const cveId = currentActiveModalFinding.cveId || "Vulnerability";
+            const safeCve = cveId.replace(/[^a-zA-Z0-9_-]/g, "_");
+            triggerFileDownload(reportText, "ThreatLens_PoC_" + safeCve + "_" + Date.now() + ".md");
+            const orig = modalCopyH1ReportBtn.innerHTML;
+            modalCopyH1ReportBtn.innerHTML = "<span>✅ Downloaded PoC!</span>";
+            setTimeout(() => { modalCopyH1ReportBtn.innerHTML = orig; }, 2500);
+        });
+    });
+}
+
+// Re-Scan Target Button
+const rescanBtn = document.getElementById("rescanBtn");
+if (rescanBtn) {
+    rescanBtn.addEventListener("click", () => {
+        if (!tabId) {
+            rescanBtn.innerHTML = "<span>⚠️ Tab ID Missing</span>";
+            setTimeout(() => { rescanBtn.innerHTML = "<span>🔄 Re-Scan Target</span>"; }, 2500);
+            return;
         }
+        const numericTabId = parseInt(tabId, 10);
+        if (isNaN(numericTabId)) return;
+
+        rescanBtn.innerHTML = "<span>⏳ Scanning...</span>";
+        chrome.tabs.sendMessage(numericTabId, { action: "REQUEST_SCAN" }, (resp) => {
+            if (chrome.runtime.lastError || !resp || !resp.data) {
+                // Content script was disconnected due to extension reload in dev mode
+                rescanBtn.innerHTML = "<span>⚠️ Press F5 on Page & Retry</span>";
+                setTimeout(() => { rescanBtn.innerHTML = "<span>🔄 Re-Scan Target</span>"; }, 3500);
+            } else {
+                rescanBtn.innerHTML = "<span>✅ Fresh Scan Loaded!</span>";
+                renderDashboardWithScan(
+                    resp.data,
+                    lastRenderedExtensionScan,
+                    lastRenderedAiAnalysis,
+                    resp.data.url || lastRenderedPageUrl
+                );
+                setTimeout(() => { rescanBtn.innerHTML = "<span>🔄 Re-Scan Target</span>"; }, 2500);
+            }
+        });
     });
 }

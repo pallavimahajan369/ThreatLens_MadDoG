@@ -2860,3 +2860,26 @@ h2::before {
     box-shadow: 0 0 18px rgba(59, 130, 246, 0.5);
     transform: translateY(-1px);
 }
+
+.modal-btn-copy {
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: #60a5fa;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.modal-btn-copy:hover {
+    background: rgba(59, 130, 246, 0.3);
+    border-color: #60a5fa;
+    color: #ffffff;
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.4);
+    transform: translateY(-1px);
+}

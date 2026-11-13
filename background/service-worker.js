@@ -6,6 +6,51 @@ importScripts("../content/siem-engine.js");
 console.log("ThreatLens service worker started");
 
 // =========================================================
+// AUTO-PURGE LEGACY FALSE POSITIVES FROM LOCAL STORAGE
+// =========================================================
+try {
+    chrome.storage.local.get(null, (allData) => {
+        const keysToUpdate = {};
+        for (const [key, val] of Object.entries(allData || {})) {
+            if ((key.startsWith("scan_") || key === "lastScan") && val && Array.isArray(val.webVulnerabilityFindings)) {
+                const hadLegacy = val.webVulnerabilityFindings.some(f => f && f.type === "POTENTIAL_SQL_INJECTION_FORM");
+                if (hadLegacy) {
+                    val.webVulnerabilityFindings = val.webVulnerabilityFindings.filter(f => f && f.type !== "POTENTIAL_SQL_INJECTION_FORM");
+                    if (val.webVulnerabilityFindings.length === 0) {
+                        val.webVulnerabilityFindings = [{
+                            category: "WEB_VULNERABILITY",
+                            type: "NO_WEB_VULNERABILITY",
+                            severity: "SAFE",
+                            reason: "No active SQL Injection or web application vulnerabilities detected"
+                        }];
+                    }
+                    if (typeof calculateOverallRisk === "function") {
+                        val.overallRisk = calculateOverallRisk(
+                            val.urlFindings || [],
+                            val.domFindings || [],
+                            val.formFindings || [],
+                            val.scriptIframeFindings || [],
+                            val.sensitiveDataFindings || [],
+                            val.webVulnerabilityFindings || [],
+                            val.phishingRisk || { level: "SAFE" },
+                            val.promptInjectionRisk || { level: "SAFE" },
+                            val.installedExtensions || []
+                        ).level;
+                    }
+                    keysToUpdate[key] = val;
+                }
+            }
+        }
+        if (Object.keys(keysToUpdate).length > 0) {
+            chrome.storage.local.set(keysToUpdate).then(() => {
+                console.log("ThreatLens: Auto-purged legacy false positives from storage.");
+            }).catch(() => {});
+        }
+    });
+} catch (e) {}
+
+
+// =========================================================
 // REAL-TIME HTTP RESPONSE SECURITY HEADERS CAPTURE
 // =========================================================
 const tabSecurityHeaders = new Map();
