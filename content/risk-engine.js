@@ -34,8 +34,19 @@ const informationalTypes = [
     "NO_SENSITIVE_DATA",
     "NO_PROMPT_INJECTION",
     "NO_SUSPICIOUS_URL_PATTERN",
-    "NO_WEB_VULNERABILITY"
+    "NO_WEB_VULNERABILITY",
+    "VERIFIED_THIRD_PARTY_IFRAME"
 ];
+
+const purelyInformationalTypes = new Set([
+    ...informationalTypes,
+    "PASSWORD_FIELD",              // On HTTPS, password field is standard informational
+    "SENSITIVE_INPUT",             // Standard inputs (email, text)
+    "FORMS",                       // Standard HTML forms
+    "EXTERNAL_SCRIPTS",            // Standard third-party scripts
+    "VERIFIED_THIRD_PARTY_IFRAME", // Verified CAPTCHA / Payment / Media embeds
+    "ENCODED_CHARACTERS"           // Standard URL encoding (e.g. %20 space in search)
+]);
 
 const severityWeight = {
     SAFE: 0,
@@ -324,10 +335,15 @@ function calculateOverallRisk(findings) {
         (f) => f && !informationalTypes.includes(f.type)
     );
 
+    // Filter out findings that are purely informational context on HTTPS pages (not threats)
+    const actionableRiskFindings = actualFindings.filter(
+        (f) => !(purelyInformationalTypes.has(f.type) && f.severity === "LOW")
+    );
+
     // =====================================
-    // NO ACTUAL FINDINGS -> SAFE
+    // NO ACTIONABLE RISK FINDINGS -> SAFE
     // =====================================
-    if (actualFindings.length === 0) {
+    if (actionableRiskFindings.length === 0) {
         return {
             level: "SAFE",
             reasons: [
@@ -337,11 +353,11 @@ function calculateOverallRisk(findings) {
     }
 
     // =====================================
-    // HIGHEST SEVERITY AMONG ACTUAL FINDINGS
+    // HIGHEST SEVERITY AMONG ACTIONABLE FINDINGS
     // =====================================
     let highestWeight = 0;
 
-    actualFindings.forEach((finding) => {
+    actionableRiskFindings.forEach((finding) => {
         const weight = getSeverityWeight(finding.severity);
         if (weight > highestWeight) {
             highestWeight = weight;
@@ -351,7 +367,7 @@ function calculateOverallRisk(findings) {
     // =====================================
     // CORRELATION
     // =====================================
-    const correlationReasons = applyCorrelationRules(actualFindings);
+    const correlationReasons = applyCorrelationRules(actionableRiskFindings);
 
     // =====================================
     // RISK LEVEL
@@ -385,7 +401,7 @@ function calculateOverallRisk(findings) {
     // =====================================
     // REASONS
     // =====================================
-    const reasons = actualFindings
+    const reasons = actionableRiskFindings
         .filter((finding) => finding.severity !== "LOW")
         .map((finding) => finding.reason);
 

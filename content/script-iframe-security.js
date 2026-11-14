@@ -322,11 +322,22 @@ function analyzeScriptIframeSecurity(providedCsp = null) {
     }
 
     // =========================================
-    // 6. CROSS-ORIGIN IFRAMES
+    // 6. CROSS-ORIGIN IFRAMES & VERIFIED PROVIDER AUDITING
     // =========================================
+    const TRUSTED_IFRAME_PROVIDERS = [
+        "google.com", "recaptcha.net", "gstatic.com",
+        "challenges.cloudflare.com", "cloudflare.com", "hcaptcha.com",
+        "stripe.com", "paypal.com", "braintreegateway.com",
+        "youtube.com", "youtube-nocookie.com", "vimeo.com",
+        "doubleclick.net", "googletagmanager.com",
+        "facebook.com", "twitter.com", "linkedin.com",
+        "github.com", "disqus.com", "intercom.io", "zendesk.com"
+    ];
 
-    let crossOriginIframeCount = 0;
-    const crossOriginItems = [];
+    let verifiedProviderCount = 0;
+    let unverifiedCrossOriginCount = 0;
+    const verifiedItems = [];
+    const unverifiedItems = [];
 
     iframes.forEach((iframe) => {
         const src = iframe.getAttribute("src");
@@ -336,22 +347,31 @@ function analyzeScriptIframeSecurity(providedCsp = null) {
             const iframeURL = new URL(src, window.location.href);
 
             if (iframeURL.origin !== window.location.origin) {
-                crossOriginIframeCount++;
-                if (crossOriginItems.length < 15) {
-                    const fileName = getScriptFileName(iframeURL.href);
-                    const domPath = getScriptDomPath(iframe);
-                    crossOriginItems.push({
-                        title: `Cross-Origin Frame #${crossOriginItems.length + 1}`,
-                        location: iframeURL.hostname,
-                        preview: src,
-                        type: "Third-Party Frame Origin",
-                        detail: `Destination Origin: ${iframeURL.origin}`,
-                        pageUrl: currentPageUrl,
-                        fileName: fileName,
-                        sourceUrl: iframeURL.href,
-                        sourceType: "Cross-Origin Frame File",
-                        domPath: domPath
-                    });
+                const host = iframeURL.hostname.toLowerCase();
+                const isVerified = TRUSTED_IFRAME_PROVIDERS.some(d => host === d || host.endsWith("." + d));
+                const fileName = getScriptFileName(iframeURL.href);
+                const domPath = getScriptDomPath(iframe);
+
+                const itemData = {
+                    title: isVerified ? `Verified Service (${host})` : `Cross-Origin Frame`,
+                    location: iframeURL.hostname,
+                    preview: src,
+                    type: isVerified ? "Verified Third-Party Provider" : "Third-Party Frame Origin",
+                    detail: `Destination Origin: ${iframeURL.origin} | Verified: ${isVerified ? "Yes (Safe)" : "No"}`,
+                    pageUrl: currentPageUrl,
+                    fileName: fileName,
+                    sourceUrl: iframeURL.href,
+                    sourceType: "Cross-Origin Frame File",
+                    domPath: domPath,
+                    isVerifiedProvider: isVerified
+                };
+
+                if (isVerified) {
+                    verifiedProviderCount++;
+                    if (verifiedItems.length < 10) verifiedItems.push(itemData);
+                } else {
+                    unverifiedCrossOriginCount++;
+                    if (unverifiedItems.length < 10) unverifiedItems.push(itemData);
                 }
             }
         } catch (error) {
@@ -359,17 +379,34 @@ function analyzeScriptIframeSecurity(providedCsp = null) {
         }
     });
 
-    if (crossOriginIframeCount > 0) {
+    if (unverifiedCrossOriginCount > 0) {
         findings.push({
             category: "IFRAME",
             type: "CROSS_ORIGIN_IFRAME",
             severity: "LOW",
-            reason: `${crossOriginIframeCount} cross-origin iframe(s) detected`,
+            isVerifiedProvider: false,
+            reason: `${unverifiedCrossOriginCount} unverified cross-origin iframe(s) detected`,
             details: {
-                title: "Cross-Origin Iframes Detected",
-                items: crossOriginItems,
-                riskExplanation: "A cross-origin iframe is loading content from a completely different domain origin. If the embedded party is compromised, it can attempt to trick users with phishing or clickjacking overlays.",
-                solution: "1. Enforce sandbox restrictions on all cross-origin iframes.\n2. Verify that the third-party provider is authenticated and trusted.\n3. Use X-Frame-Options: SAMEORIGIN or CSP frame-ancestors to prevent framing of your own sensitive pages."
+                title: "Unverified Cross-Origin Iframes Detected",
+                items: unverifiedItems,
+                riskExplanation: "A cross-origin iframe is loading content from an external domain origin. Verify that the embedded party is trusted and necessary.",
+                solution: "1. Enforce sandbox restrictions on cross-origin iframes.\n2. Verify that the third-party provider is authenticated and trusted.\n3. Use CSP frame-src and child-src to whitelist allowed destinations."
+            }
+        });
+    }
+
+    if (verifiedProviderCount > 0) {
+        findings.push({
+            category: "IFRAME",
+            type: "VERIFIED_THIRD_PARTY_IFRAME",
+            severity: "LOW",
+            isVerifiedProvider: true,
+            reason: `${verifiedProviderCount} verified third-party iframe(s) active (CAPTCHA, payment, or media)`,
+            details: {
+                title: "Verified Third-Party Iframes Active",
+                items: verifiedItems,
+                riskExplanation: "The page embeds verified, industry-standard third-party components (such as Google reCAPTCHA, Cloudflare Turnstile, or Stripe/PayPal). This is legitimate functionality.",
+                solution: "No action required. Ensure iframe sandbox and CSP directives allow these trusted domains."
             }
         });
     }

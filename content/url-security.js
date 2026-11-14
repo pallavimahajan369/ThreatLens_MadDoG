@@ -121,8 +121,7 @@ function analyzeURL(url) {
             category: "URL",
 
             type: "SUSPICIOUS_TLD",
-
-            severity: "MEDIUM",
+            severity: "LOW",
 
             reason: `Suspicious top-level domain detected: .${tld}`
 
@@ -204,33 +203,34 @@ function analyzeURL(url) {
 
 
     // ==================================
-    // 7. SUSPICIOUS KEYWORDS
+    // 7. CONTEXT-AWARE SUSPICIOUS KEYWORDS
     // ==================================
+    // Keywords like 'login', 'account', 'verify' are completely normal in paths
+    // on legitimate websites (e.g. linkedin.com/login, accounts.google.com, github.com/account/settings).
+    // They ONLY indicate suspicious phishing behavior when used deceptively:
+    // a) Embedded in subdomains (e.g. login.paypal.attacker.com), OR
+    // b) Combined with an IP-based host, suspicious TLD, or excessive subdomains.
+    const hostLower = hostname.toLowerCase();
+    const isHostStructurallySuspicious = ipPattern.test(hostname) ||
+                                         suspiciousTLDs.includes(tld) ||
+                                         subdomainCount >= 3;
 
-    const lowerURL = url.toLowerCase();
+    // Check if keyword is deceivingly embedded in the host/subdomain
+    const keywordsInHost = suspiciousKeywords.filter(k => hostLower.includes(k));
+    const keywordsInPath = suspiciousKeywords.filter(k => parsedURL.pathname.toLowerCase().includes(k));
 
-    const matchedKeywords =
-        suspiciousKeywords.filter(keyword =>
-            lowerURL.includes(keyword)
-        );
-
-
-    if (matchedKeywords.length >= 2) {
-
+    if (
+        (keywordsInHost.length >= 2 && isHostStructurallySuspicious) ||
+        (keywordsInHost.length >= 1 && isHostStructurallySuspicious) ||
+        (keywordsInPath.length >= 2 && isHostStructurallySuspicious)
+    ) {
+        const detectedKeywords = [...new Set([...keywordsInHost, ...keywordsInPath])];
         findings.push({
-
             category: "URL",
-
             type: "SUSPICIOUS_KEYWORDS",
-
-            severity: "MEDIUM",
-
-            reason:
-                "Multiple suspicious keywords detected: " +
-                matchedKeywords.join(", ")
-
+            severity: "LOW", // supporting signal per roadmap
+            reason: "Deceptive keywords detected on untrusted URL host or structure: " + detectedKeywords.join(", ")
         });
-
     }
 
 
